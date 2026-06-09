@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NHỊP BÓNG 26
 
-## Getting Started
+Website lịch World Cup 2026 theo giờ Việt Nam, xây bằng Next.js App Router. Sản phẩm không yêu cầu đăng nhập, không dùng database; favorite được lưu trong `localStorage`.
 
-First, run the development server:
+## Chạy dự án
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```powershell
+npm.cmd install
+npm.cmd run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Mở `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Checkpoint
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```powershell
+npm.cmd run check
+```
 
-## Learn More
+Lệnh này lần lượt kiểm tra dữ liệu, lint và production build.
 
-To learn more about Next.js, take a look at the following resources:
+Để smoke test production routes:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```powershell
+npm.cmd run build
+node.exe node_modules/next/dist/bin/next start
+$env:BASE_URL="http://localhost:3000"
+npm.cmd run smoke
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Dữ liệu
 
-## Deploy on Vercel
+- Nguồn tĩnh nằm tại `src/data/raw`.
+- Query và normalize nằm tại `src/lib/worldcup.ts`.
+- `npm run data:validate` kiểm tra quan hệ, ID, ngày giờ và sân vận động.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Tiến độ
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Xem [PROGRESS.md](./PROGRESS.md). Một giai đoạn chỉ được đánh dấu hoàn thành sau khi checkpoint đạt.

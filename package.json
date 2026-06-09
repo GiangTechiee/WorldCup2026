@@ -6,12 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "data:validate": "tsx scripts/validate-data.ts",
+    "check": "npm run data:validate && npm run lint && npm run build",
+    "smoke": "tsx scripts/smoke-routes.ts"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "country-flag-icons": "^1.6.17",
     "next": "16.2.7",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -21,6 +27,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }
