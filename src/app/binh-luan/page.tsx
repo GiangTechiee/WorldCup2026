@@ -1,5 +1,8 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Image from "next/image";
-import { ChatDots, Quotes, ShieldCheck, Heart, ShareNetwork, Warning } from "@phosphor-icons/react/dist/ssr";
+import { ChatDots, Quotes, ShieldCheck, Heart, ShareNetwork, Warning } from "@phosphor-icons/react";
 
 type Comment = {
   id: string;
@@ -12,55 +15,114 @@ type Comment = {
   isExpert?: boolean;
 };
 
-export default function BinhLuanPage() {
-  const datKaQuotes = [
-    {
-      match: "Mexico vs South Africa (Khai mạc)",
-      quote: "Hôm nay anh em cứ đặt trọn niềm tin vào cửa trên Mexico nhé. Đất nước Nam Phi phong thủy không hợp màu áo đỏ lửa của Mexico đâu. Macao ra kèo chấp nửa trái ăn đủ là có ý đồ cả rồi, tin tôi đi, không ăn tôi đi đầu xuống đất!",
-      time: "10 phút trước",
-    },
-    {
-      match: "Germany vs Ivory Coast (Vòng bảng)",
-      quote: "Bữa trước tin mấy ông tuyển Đức làm tôi đi bộ mỏi cả chân, suýt nữa phải bán cả xe. Đợt này tôi khuyên thật lòng: Đức chấp 1 trái rưỡi thì cứ nằm dưới Bờ Biển Ngà cho lành. Đừng cãi anh Đạt, Macao đang muốn thu lưới đấy!",
-      time: "2 giờ trước",
-    },
-    {
-      match: "Portugal vs DR Congo (Vòng bảng)",
-      quote: "Ronaldo giải này 41 tuổi rồi nhưng vẫn gân lắm, Bồ Đào Nha chấp Congo 2 trái cơ mà. Nhưng từ kinh nghiệm đi Macao nhiều năm, anh khuyên anh em cứ bắt Congo đi, bóng rung hiệp 2 kiểu gì cũng nổ. Quay đầu là bờ!",
-      time: "5 giờ trước",
-    },
-  ];
+const datKaQuotes = [
+  {
+    match: "Mexico vs South Africa (Khai mạc)",
+    quote: "Hôm nay anh em cứ đặt trọn niềm tin vào cửa trên Mexico nhé. Đất nước Nam Phi phong thủy không hợp màu áo đỏ lửa của Mexico đâu. Macao ra kèo chấp nửa trái ăn đủ là có ý đồ cả rồi, tin tôi đi, không ăn tôi đi đầu xuống đất!",
+    time: "10 phút trước",
+  },
+  {
+    match: "Germany vs Ivory Coast (Vòng bảng)",
+    quote: "Bữa trước tin mấy ông tuyển Đức làm tôi đi bộ mỏi cả chân, suýt nữa phải bán cả xe. Đợt này tôi khuyên thật lòng: Đức chấp 1 trái rưỡi thì cứ nằm dưới Bờ Biển Ngà cho lành. Đừng cãi anh Đạt, Macao đang muốn thu lưới đấy!",
+    time: "2 giờ trước",
+  },
+  {
+    match: "Portugal vs DR Congo (Vòng bảng)",
+    quote: "Ronaldo giải này 41 tuổi rồi nhưng vẫn gân lắm, Bồ Đào Nha chấp Congo 2 trái cơ mà. Nhưng từ kinh nghiệm đi Macao nhiều năm, anh khuyên anh em cứ bắt Congo đi, bóng rung hiệp 2 kiểu gì cũng nổ. Quay đầu là bờ!",
+    time: "5 giờ trước",
+  },
+];
 
-  const userComments: Comment[] = [
-    {
-      id: "1",
-      author: "Hải Quay Xe",
-      time: "2 phút trước",
-      content: "Uy tín quá anh Đạt ơi! Hôm qua nghe lời anh nằm dưới ăn ngập mồm, nay em lại xuống tiền theo anh tiếp đây. Khai mạc rực rỡ!",
-      likes: 42,
-    },
-    {
-      id: "2",
-      author: "Tuấn Híp",
-      time: "8 phút trước",
-      content: "Anh Đạt phán thế này thì em tự tin đi ngược lại rồi, tối nay nằm Nam Phi thôi anh em ơi! Cứ ngược anh Đạt là giàu sang phú quý =)))",
-      likes: 128,
-    },
-    {
-      id: "3",
-      author: "Linh Xe Ôm",
-      time: "15 phút trước",
-      content: "Anh Đạt còn cái nịt nào không cho em mượn tạm qua mùa World Cup với... Vừa nghe anh trận trước xong giờ đang đứng ngoài đê lộng gió quá.",
-      likes: 85,
-    },
-    {
-      id: "4",
-      author: "Cường Tỉ Đô",
-      time: "30 phút trước",
-      content: "Đạt Ka Macao ra kèo thì chỉ có chuẩn. Khung giờ 2h sáng đúng là cần những nhận định tâm linh thế này để anh em có động lực thức đêm xem bóng.",
-      likes: 19,
-    },
-  ];
+const defaultComments: Comment[] = [
+  {
+    id: "1",
+    author: "Hải Quay Xe",
+    time: "2 phút trước",
+    content: "Uy tín quá anh Đạt ơi! Hôm qua nghe lời anh nằm dưới ăn ngập mồm, nay em lại xuống tiền theo anh tiếp đây. Khai mạc rực rỡ!",
+    likes: 42,
+  },
+  {
+    id: "2",
+    author: "Tuấn Híp",
+    time: "8 phút trước",
+    content: "Anh Đạt phán thế này thì em tự tin đi ngược lại rồi, tối nay nằm Nam Phi thôi anh em ơi! Cứ ngược anh Đạt là giàu sang phú quý =)))",
+    likes: 128,
+  },
+  {
+    id: "3",
+    author: "Linh Xe Ôm",
+    time: "15 phút trước",
+    content: "Anh Đạt còn cái nịt nào không cho em mượn tạm qua mùa World Cup với... Vừa nghe anh trận trước xong giờ đang đứng ngoài đê lộng gió quá.",
+    likes: 85,
+  },
+  {
+    id: "4",
+    author: "Cường Tỉ Đô",
+    time: "30 phút trước",
+    content: "Đạt Ka Macao ra kèo thì chỉ có chuẩn. Khung giờ 2h sáng đúng là cần những nhận định tâm linh thế này để anh em có động lực thức đêm xem bóng.",
+    likes: 19,
+  },
+];
+
+export default function BinhLuanPage() {
+  // State to manage list of comments and current text input
+  const [comments, setComments] = useState<Comment[]>(defaultComments);
+  const [newCommentText, setNewCommentText] = useState("");
+  const [authorName, setAuthorName] = useState("");
+
+  // Load custom comments from localStorage if available
+  useEffect(() => {
+    const saved = localStorage.getItem("nhipbong_user_comments");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as Comment[];
+        setTimeout(() => {
+          setComments([...defaultComments, ...parsed]);
+        }, 0);
+      } catch {
+        // Ignored
+      }
+    }
+  }, []);
+
+  const handleLike = (id: string) => {
+    setComments(prev => 
+      prev.map(c => c.id === id ? { ...c, likes: c.likes + 1 } : c)
+    );
+  };
+
+  const handleSubmitComment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCommentText.trim()) return;
+
+    const nameToUse = authorName.trim() || "Người hâm mộ ẩn danh";
+    const newComment: Comment = {
+      id: `user-${Date.now()}`,
+      author: nameToUse,
+      time: "Vừa xong",
+      content: newCommentText.trim(),
+      likes: 0,
+    };
+
+    const updatedComments = [...comments, newComment];
+    setComments(updatedComments);
+
+    // Save only user comments to localStorage
+    const saved = localStorage.getItem("nhipbong_user_comments");
+    let userOnlyComments: Comment[] = [];
+    if (saved) {
+      try {
+        userOnlyComments = JSON.parse(saved) as Comment[];
+      } catch {
+        userOnlyComments = [];
+      }
+    }
+    userOnlyComments.push(newComment);
+    localStorage.setItem("nhipbong_user_comments", JSON.stringify(userOnlyComments));
+
+    // Reset input fields
+    setNewCommentText("");
+  };
 
   return (
     <div className="page-shell section-space">
@@ -148,24 +210,34 @@ export default function BinhLuanPage() {
               <ChatDots size={18} weight="fill" className="text-[var(--fire)]" /> Trực Tiếp Fanzone
             </h3>
 
-            {/* Fake post action */}
-            <div className="mb-6">
+            {/* Comment submission form */}
+            <form onSubmit={handleSubmitComment} className="mb-6 space-y-2">
+              <input 
+                type="text" 
+                placeholder="Tên của bạn..." 
+                value={authorName}
+                onChange={(e) => setAuthorName(e.target.value)}
+                className="w-full p-2 text-xs border border-zinc-200 rounded-lg bg-white focus:outline-none focus:border-[var(--fire)]"
+              />
               <textarea 
                 placeholder="Chia sẻ nhận định của bạn về trận đấu hôm nay..."
+                value={newCommentText}
+                onChange={(e) => setNewCommentText(e.target.value)}
                 className="w-full h-20 p-3 text-xs border border-zinc-200 rounded-xl bg-white resize-none focus:outline-none focus:border-[var(--fire)]"
+                required
               ></textarea>
               <div className="flex justify-between items-center mt-2">
-                <span className="text-[10px] text-zinc-400">Không cần đăng nhập</span>
-                <button className="button-primary !min-height-0 py-1.5 px-4 text-xs font-extrabold rounded-lg">
+                <span className="text-[10px] text-zinc-400">Lưu vào localStorage</span>
+                <button type="submit" className="button-primary !min-height-0 py-1.5 px-4 text-xs font-extrabold rounded-lg">
                   Gửi chém gió
                 </button>
               </div>
-            </div>
+            </form>
 
             {/* Comments Feed */}
-            <div className="space-y-4">
-              {userComments.map((comment) => (
-                <div key={comment.id} className="p-3 bg-white rounded-xl border border-zinc-100 shadow-sm space-y-2">
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+              {[...comments].reverse().map((comment) => (
+                <div key={comment.id} className="p-3 bg-white rounded-xl border border-zinc-100 shadow-sm space-y-2 animate-[fadeInUp_0.25s_ease-out]">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded-full bg-zinc-200 flex items-center justify-center font-bold text-zinc-600 text-[10px] uppercase">
@@ -177,10 +249,13 @@ export default function BinhLuanPage() {
                   </div>
                   <p className="text-xs text-zinc-600 leading-relaxed">{comment.content}</p>
                   <div className="flex items-center gap-4 text-[10px] text-zinc-400 pt-1">
-                    <button className="flex items-center gap-1 hover:text-[var(--fire)] transition-colors">
+                    <button 
+                      onClick={() => handleLike(comment.id)}
+                      className="flex items-center gap-1 hover:text-[var(--fire)] transition-colors active:scale-95"
+                    >
                       <Heart size={12} /> Thích ({comment.likes})
                     </button>
-                    <span>Phản hồi</span>
+                    <span className="cursor-pointer hover:underline">Phản hồi</span>
                   </div>
                 </div>
               ))}
