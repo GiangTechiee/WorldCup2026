@@ -17,6 +17,7 @@
 }
 
 html {
+  font-size: 105%;
   scroll-behavior: smooth;
 }
 
@@ -28,6 +29,7 @@ body {
     var(--paper);
   color: var(--ink);
   font-family: var(--font-geist-sans), sans-serif;
+  font-size: 1.02rem;
   padding-bottom: 5rem;
 }
 
