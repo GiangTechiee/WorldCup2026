@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { SoccerBall } from "@phosphor-icons/react";
+import { ArrowCircleUp, FirstAidKit, Prohibit, SoccerBall } from "@phosphor-icons/react";
 import { FavoriteButton } from "@/components/favorite-button";
 import { TeamFlag } from "@/components/team-flag";
 import type {
@@ -20,6 +20,13 @@ type TeamSummary = {
   countryCode: string;
   id: string | null;
   name: string;
+};
+
+type MatchCenterTab = "events" | "lineups" | "stats";
+
+const tabFromLocation = (): MatchCenterTab => {
+  const tab = new URLSearchParams(window.location.search).get("tab");
+  return tab === "lineups" || tab === "stats" ? tab : "events";
 };
 
 const statusLabel = (score: LiveMatchScore | null) => {
@@ -150,6 +157,8 @@ const pitchX = (position: string | null, reversed: boolean) => {
   const right = reversed ? 82 : 18;
 
   if (value === "G" || value === "F" || value === "CF" || value === "CM" || value === "DM" || value === "CD") return 50;
+  if (value === "CM-L") return rightCenter;
+  if (value === "CM-R") return leftCenter;
   if (value.endsWith("-L")) return leftCenter;
   if (value.endsWith("-R")) return rightCenter;
   if (value === "LB" || value === "LM" || value === "LW") return left;
@@ -165,32 +174,442 @@ const pitchCoordinates = (player: MatchLineup["starters"][number], reversed: boo
   };
 };
 
+const abbreviatedPlayerName = (name: string) => {
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return name;
+  const lastName = parts.at(-1) ?? name;
+  const initials = parts
+    .slice(0, -1)
+    .map((part) => part[0])
+    .filter(Boolean)
+    .join(".");
+
+  return initials ? `${initials}. ${lastName}` : lastName;
+};
+
+const lineupPlayerLabel = (player: MatchLineup["starters"][number]) =>
+  `${player.number ? `${player.number} ` : ""}${abbreviatedPlayerName(player.name)}`;
+
+const playerInitials = (name: string) => {
+  const parts = name.split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts.at(-1)?.[0] ?? ""}` : name.slice(0, 2)).toUpperCase();
+};
+
+const generatedPlayerAvatar = (player: MatchLineup["starters"][number]) => {
+  const label = playerInitials(player.name);
+  const hue = Math.abs(player.name.split("").reduce((total, char) => total + char.charCodeAt(0), 0)) % 360;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+      <defs>
+        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stop-color="hsl(${hue} 62% 58%)"/>
+          <stop offset="1" stop-color="hsl(${(hue + 42) % 360} 58% 34%)"/>
+        </linearGradient>
+      </defs>
+      <rect width="96" height="96" rx="18" fill="url(#g)"/>
+      <circle cx="48" cy="34" r="16" fill="rgba(255,255,255,.78)"/>
+      <path d="M18 88c4-22 18-34 30-34s26 12 30 34" fill="rgba(255,255,255,.78)"/>
+      <text x="48" y="53" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="800" fill="#16341f">${label}</text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+};
+
+const kitPalettes: Record<string, { accent: string; primary: string; secondary: string }> = {
+  argentina: { accent: "#f4c542", primary: "#75aadb", secondary: "#ffffff" },
+  brazil: { accent: "#1d8b45", primary: "#f7d117", secondary: "#1d8b45" },
+  canada: { accent: "#ffffff", primary: "#d71920", secondary: "#ffffff" },
+  czechia: { accent: "#d7141a", primary: "#174ea6", secondary: "#ffffff" },
+  "czech republic": { accent: "#d7141a", primary: "#174ea6", secondary: "#ffffff" },
+  france: { accent: "#ef4135", primary: "#1f3c88", secondary: "#ffffff" },
+  germany: { accent: "#f6c800", primary: "#ffffff", secondary: "#111111" },
+  japan: { accent: "#e60012", primary: "#1b4f9c", secondary: "#ffffff" },
+  mexico: { accent: "#ce1126", primary: "#006847", secondary: "#ffffff" },
+  morocco: { accent: "#006233", primary: "#c1272d", secondary: "#006233" },
+  paraguay: { accent: "#0038a8", primary: "#d52b1e", secondary: "#ffffff" },
+  qatar: { accent: "#ffffff", primary: "#8a1538", secondary: "#ffffff" },
+  "korea republic": { accent: "#0047a0", primary: "#c60c30", secondary: "#ffffff" },
+  "republic of korea": { accent: "#0047a0", primary: "#c60c30", secondary: "#ffffff" },
+  "south africa": { accent: "#ffb612", primary: "#007a4d", secondary: "#ffb612" },
+  "south korea": { accent: "#0047a0", primary: "#c60c30", secondary: "#ffffff" },
+  switzerland: { accent: "#ffffff", primary: "#d52b1e", secondary: "#ffffff" },
+  usa: { accent: "#b31942", primary: "#ffffff", secondary: "#0a3161" },
+};
+
+const normalizeTeamName = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const teamKitPalette = (teamName: string) => {
+  const normalized = normalizeTeamName(teamName);
+  const direct = kitPalettes[normalized];
+  if (direct) return direct;
+
+  const hue = Math.abs(normalized.split("").reduce((total, char) => total + char.charCodeAt(0), 0)) % 360;
+  return {
+    accent: `hsl(${(hue + 160) % 360} 76% 48%)`,
+    primary: `hsl(${hue} 72% 42%)`,
+    secondary: "#ffffff",
+  };
+};
+
+const teamKitAvatar = (player: MatchLineup["starters"][number], teamName: string) => {
+  const { accent, primary, secondary } = teamKitPalette(teamName);
+  const number = player.number ?? "";
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+      <rect width="96" height="96" rx="18" fill="#b9c9bf"/>
+      <path d="M31 18 18 27 10 48l14 6 5-12v38h38V42l5 12 14-6-8-21-13-9-10 8H41z" fill="${primary}" stroke="rgba(0,0,0,.18)" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M41 18c2 6 12 6 14 0l5 7c-6 8-18 8-24 0z" fill="${secondary}" opacity=".92"/>
+      <path d="M28 23 20 30l-6 16 9 4 6-17zM68 23l8 7 6 16-9 4-6-17z" fill="${accent}" opacity=".95"/>
+      <text x="48" y="57" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="900" fill="${secondary}" stroke="rgba(0,0,0,.45)" stroke-width="1">${number}</text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+};
+
+const playerImageSrc = (player: MatchLineup["starters"][number], teamName: string) =>
+  player.imageUrl ?? teamKitAvatar(player, teamName) ?? generatedPlayerAvatar(player);
+
+const eventDescription = (event: LiveMatchEvent) => {
+  if (event.type.toLowerCase() === "subst" && event.assistName) {
+    return `${event.playerName ?? ""} vào sân · ${event.assistName} ra sân`;
+  }
+
+  return event.playerName ?? event.teamName ?? "";
+};
+
+const normalizePersonName = (value: string | null | undefined) =>
+  (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const playerEvents = (playerName: string, events: LiveMatchEvent[]) => {
+  const normalizedName = normalizePersonName(playerName);
+  return events.filter((event) => {
+    const player = normalizePersonName(event.playerName);
+    const assist = normalizePersonName(event.assistName);
+    return player === normalizedName || assist === normalizedName;
+  });
+};
+
+const substituteInMinute = (playerName: string, events: LiveMatchEvent[]) => {
+  const normalizedName = normalizePersonName(playerName);
+  const event = events.find(
+    (item) => item.type.toLowerCase() === "subst" && normalizePersonName(item.playerName) === normalizedName,
+  );
+  return event?.elapsed ?? null;
+};
+
+const firstPlayerEventMinute = (playerName: string, events: LiveMatchEvent[]) =>
+  playerEvents(playerName, events).reduce<number | null>((earliest, event) => {
+    if (event.elapsed === null) return earliest;
+    return earliest === null ? event.elapsed : Math.min(earliest, event.elapsed);
+  }, null);
+
+const sortSubstitutes = (players: MatchLineup["substitutes"], events: LiveMatchEvent[]) =>
+  [...players].sort((left, right) => {
+    const leftSubMinute = substituteInMinute(left.name, events);
+    const rightSubMinute = substituteInMinute(right.name, events);
+    if (leftSubMinute !== null || rightSubMinute !== null) {
+      if (leftSubMinute === null) return 1;
+      if (rightSubMinute === null) return -1;
+      return leftSubMinute - rightSubMinute;
+    }
+
+    const leftEventMinute = firstPlayerEventMinute(left.name, events);
+    const rightEventMinute = firstPlayerEventMinute(right.name, events);
+    if (leftEventMinute !== null || rightEventMinute !== null) {
+      if (leftEventMinute === null) return 1;
+      if (rightEventMinute === null) return -1;
+      return leftEventMinute - rightEventMinute;
+    }
+
+    return 0;
+  });
+
+function PlayerEventBadges({
+  align = "left",
+  events,
+  playerName,
+}: {
+  align?: "left" | "right";
+  events: LiveMatchEvent[];
+  playerName: string;
+}) {
+  const relatedEvents = playerEvents(playerName, events);
+  if (!relatedEvents.length) return null;
+
+  return (
+    <span className="match-lineup-player-events">
+      {relatedEvents.map((event, index) => {
+        const detail = event.detail.toLowerCase();
+        const minute = event.elapsed !== null ? `${event.elapsed}'` : "";
+        if (event.type.toLowerCase() === "subst") {
+          const isIn = normalizePersonName(event.playerName) === normalizePersonName(playerName);
+          return (
+            <span className={isIn ? "match-lineup-sub-in" : "match-lineup-sub-out"} key={`${event.type}-${event.elapsed}-${index}`}>
+              {align === "right" && minute}
+              <ArrowCircleUp size={13} weight="fill" aria-hidden="true" />
+              {align === "left" && minute}
+            </span>
+          );
+        }
+        if (isGoal(event)) {
+          return (
+            <span key={`${event.type}-${event.elapsed}-${index}`}>
+              {align === "right" && minute}
+              <SoccerBall size={12} weight="fill" aria-hidden="true" />
+              {align === "left" && minute}
+            </span>
+          );
+        }
+        if (detail.includes("yellow")) {
+          return (
+            <span key={`${event.type}-${event.elapsed}-${index}`}>
+              {align === "right" && minute}
+              <span className="match-card-glyph match-card-yellow" title={minute} />
+              {align === "left" && minute}
+            </span>
+          );
+        }
+        if (detail.includes("red")) {
+          return (
+            <span key={`${event.type}-${event.elapsed}-${index}`}>
+              {align === "right" && minute}
+              <span className="match-card-glyph match-card-red" title={minute} />
+              {align === "left" && minute}
+            </span>
+          );
+        }
+        return null;
+      })}
+    </span>
+  );
+}
+
 function PitchPlayer({
   player,
   reversed = false,
+  teamName,
 }: {
   player: MatchLineup["starters"][number];
   reversed?: boolean;
+  teamName: string;
 }) {
   const coordinates = pitchCoordinates(player, reversed);
-  const shortName = player.name.split(" ").at(-1) ?? player.name;
+  const displayName = lineupPlayerLabel(player);
+  const avatarSrc = playerImageSrc(player, teamName);
+  const popupSide = coordinates.y < 16 ? "below" : coordinates.x > 62 ? "left" : "right";
   return (
     <div
-      className="match-pitch-player"
+      className={`match-pitch-player match-pitch-player-has-image match-pitch-popup-${popupSide}`}
       style={{
         left: `${coordinates.x}%`,
         top: `${coordinates.y}%`,
       }}
+      tabIndex={0}
     >
       <span className="data">
-        {player.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img alt="" src={player.imageUrl} />
-        ) : (
-          player.number ?? "-"
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img alt="" src={avatarSrc} />
       </span>
-      <strong title={player.name}>{shortName}</strong>
+      <strong title={player.name}>{displayName}</strong>
+      <span className="match-pitch-player-popup" aria-hidden="true">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img alt="" src={avatarSrc} />
+        <b>{displayName}</b>
+      </span>
+    </div>
+  );
+}
+
+function BenchPlayer({
+  align = "left",
+  events,
+  player,
+  teamName,
+}: {
+  align?: "left" | "right";
+  events: LiveMatchEvent[];
+  player: MatchLineup["substitutes"][number] | null;
+  teamName: string;
+}) {
+  if (!player) return <div className="match-bench-player match-bench-player-empty" />;
+
+  const label = lineupPlayerLabel(player);
+  const avatarSrc = playerImageSrc(player, teamName);
+  return (
+    <div
+      className={`match-bench-player match-bench-player-${align} match-bench-player-has-image`}
+      tabIndex={0}
+    >
+      {align === "left" && (
+        <span className="match-bench-avatar data">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img alt="" src={avatarSrc} />
+        </span>
+      )}
+      <div>
+        <strong title={player.name}>{label}</strong>
+        <p>{player.position && player.position !== "SUB" ? player.position : ""}</p>
+        <PlayerEventBadges align={align} events={events} playerName={player.name} />
+      </div>
+      {align === "right" && (
+        <span className="match-bench-avatar data">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img alt="" src={avatarSrc} />
+        </span>
+      )}
+      <span className="match-bench-player-popup" aria-hidden="true">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img alt="" src={avatarSrc} />
+        <b>{label}</b>
+      </span>
+    </div>
+  );
+}
+
+function LineupLegend() {
+  return (
+    <div className="match-lineup-legend">
+      <span>
+        <SoccerBall size={14} weight="fill" aria-hidden="true" />
+        Bàn thắng
+      </span>
+      <span>
+        <span className="match-card-glyph match-card-yellow" />
+        Thẻ vàng
+      </span>
+      <span>
+        <span className="match-card-glyph match-card-red" />
+        Thẻ đỏ
+      </span>
+      <span>
+        <ArrowCircleUp className="match-lineup-sub-in" size={15} weight="fill" aria-hidden="true" />
+        Thay người vào sân
+      </span>
+      <span>
+        <ArrowCircleUp className="match-lineup-sub-out" size={15} weight="fill" aria-hidden="true" />
+        Thay người ra sân
+      </span>
+      <span>
+        <FirstAidKit size={14} weight="fill" aria-hidden="true" />
+        Chấn thương
+      </span>
+      <span>
+        <Prohibit size={14} aria-hidden="true" />
+        Treo giò
+      </span>
+      <span>
+        <SoccerBall className="match-lineup-assist" size={14} aria-hidden="true" />
+        Kiến tạo
+      </span>
+    </div>
+  );
+}
+
+function EventTimelineRow({
+  event,
+  side,
+}: {
+  event: LiveMatchEvent;
+  side: "away" | "home" | "neutral";
+}) {
+  const content = (
+    <div className="match-event-card">
+      <strong>{eventLabel(event)}</strong>
+      <p>{eventDescription(event)}</p>
+    </div>
+  );
+
+  return (
+    <div className={`match-event-row match-event-row-${side}`}>
+      <div className="match-event-cell match-event-cell-home">{side === "home" ? content : null}</div>
+      <div className="match-event-center">
+        <span className="match-event-minute data">{event.elapsed ?? "-"}&apos;</span>
+        <EventGlyph event={event} />
+      </div>
+      <div className="match-event-cell match-event-cell-away">{side === "away" || side === "neutral" ? content : null}</div>
+    </div>
+  );
+}
+
+function LineupExtras({
+  away,
+  events,
+  home,
+  lineups,
+}: {
+  away: TeamSummary;
+  events: LiveMatchEvent[];
+  home: TeamSummary;
+  lineups: MatchLineup[];
+}) {
+  const homeLineup = lineups[0];
+  const awayLineup = lineups[1];
+  const homeSubstitutes = homeLineup ? sortSubstitutes(homeLineup.substitutes, events) : [];
+  const awaySubstitutes = awayLineup ? sortSubstitutes(awayLineup.substitutes, events) : [];
+  const substituteRows = Math.max(homeSubstitutes.length, awaySubstitutes.length);
+  const hasCoaches = Boolean(homeLineup?.coachName || awayLineup?.coachName);
+
+  return (
+    <div className="match-lineup-extras">
+      <section className="match-bench-card">
+        <header>
+          <TeamFlag countryCode={home.countryCode} label={home.name} />
+          <strong>Băng ghế dự bị</strong>
+          <TeamFlag countryCode={away.countryCode} label={away.name} />
+        </header>
+        <div className="match-bench-list">
+          {Array.from({ length: substituteRows }).map((_, index) => (
+            <div className="match-bench-row" key={`bench-${index}`}>
+              <BenchPlayer
+                events={events}
+                player={homeSubstitutes[index] ?? null}
+                teamName={homeLineup?.teamName ?? home.name}
+              />
+              <BenchPlayer
+                align="right"
+                events={events}
+                player={awaySubstitutes[index] ?? null}
+                teamName={awayLineup?.teamName ?? away.name}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {hasCoaches && (
+        <section className="match-coach-card">
+          <div>
+            <strong>{homeLineup?.coachName}</strong>
+            <p>
+              <TeamFlag countryCode={home.countryCode} label={home.name} />
+              Người quản lý
+            </p>
+          </div>
+          <div>
+            <strong>{awayLineup?.coachName}</strong>
+            <p>
+              Người quản lý
+              <TeamFlag countryCode={away.countryCode} label={away.name} />
+            </p>
+          </div>
+        </section>
+      )}
+
+      <p className="match-lineup-note">Điểm xếp hạng cầu thủ (0-10) sẽ hiển thị khi nguồn dữ liệu trận đấu cung cấp.</p>
+      <LineupLegend />
     </div>
   );
 }
@@ -208,6 +627,7 @@ function PitchTeam({ lineup, reversed = false }: { lineup: MatchLineup; reversed
             key={`${player.id ?? player.name}-${playerIndex}`}
             player={player}
             reversed={reversed}
+            teamName={lineup.teamName}
           />
         ))}
       </div>
@@ -224,11 +644,16 @@ export function MatchCenter({
   home: TeamSummary;
   match: Match;
 }) {
-  const [activeTab, setActiveTab] = useState<"events" | "lineups" | "stats">("events");
+  const [activeTab, setActiveTab] = useState<MatchCenterTab>("events");
   const [score, setScore] = useState<LiveMatchScore | null>(null);
   const [details, setDetails] = useState<MatchDetailsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [detailsError, setDetailsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setActiveTab(tabFromLocation()), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -375,14 +800,11 @@ export function MatchCenter({
           <div className="match-event-list">
             {events.length ? (
               events.map((event, index) => (
-                <div className="match-event-row" key={`${event.elapsed}-${event.type}-${index}`}>
-                  <span className="data">{event.elapsed ?? "-"}&apos;</span>
-                  <EventGlyph event={event} />
-                  <div>
-                    <strong>{eventLabel(event)}</strong>
-                    <p>{event.teamName}{event.playerName ? ` · ${event.playerName}` : ""}</p>
-                  </div>
-                </div>
+                <EventTimelineRow
+                  event={event}
+                  key={`${event.elapsed}-${event.type}-${index}`}
+                  side={eventSide(event, match.homeTeam, match.awayTeam)}
+                />
               ))
             ) : (
               <MissingData title="Chưa có diễn biến chi tiết">
@@ -394,10 +816,13 @@ export function MatchCenter({
 
         {activeTab === "lineups" && (
           details?.lineups.length ? (
-            <div className="match-lineup-pitch">
-              {details.lineups[0] && <PitchTeam lineup={details.lineups[0]} />}
-              <div className="match-pitch-center" aria-hidden="true"><span /></div>
-              {details.lineups[1] && <PitchTeam lineup={details.lineups[1]} reversed />}
+            <div className="match-lineup-stack">
+              <div className="match-lineup-pitch">
+                {details.lineups[0] && <PitchTeam lineup={details.lineups[0]} />}
+                <div className="match-pitch-center" aria-hidden="true"><span /></div>
+                {details.lineups[1] && <PitchTeam lineup={details.lineups[1]} reversed />}
+              </div>
+              <LineupExtras away={away} events={events} home={home} lineups={details.lineups} />
             </div>
           ) : (
             <MissingData title="Chưa có đội hình ra sân">

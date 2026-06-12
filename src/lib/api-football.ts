@@ -133,6 +133,7 @@ const findFixture = async (match: Match) => {
 const toPlayer = (player: ApiFootballPlayer): MatchLineupPlayer => ({
   id: player.id ?? null,
   imageUrl: null,
+  jerseyUrl: null,
   name: player.name ?? "Chưa xác định",
   number: player.number ?? null,
   position: player.pos ?? null,
