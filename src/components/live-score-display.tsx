@@ -2,6 +2,7 @@
 
 import { useLiveScores } from "@/components/live-scores-provider";
 import type { LiveMatchScore } from "@/lib/live-score";
+import { isScoreVisible } from "@/lib/live-score";
 
 const labelForStatus = (score: LiveMatchScore | undefined) => {
   if (!score) return "Chưa đá";
@@ -11,8 +12,6 @@ const labelForStatus = (score: LiveMatchScore | undefined) => {
       return "LIVE";
     case "halftime":
       return "HT";
-    case "finished":
-      return "KT";
     case "postponed":
       return "Hoãn";
     case "cancelled":
@@ -31,6 +30,24 @@ export function LiveScoreDisplay({
   const liveScores = useLiveScores();
   const score = liveScores?.scoresByMatchId[matchId];
   const statusLabel = labelForStatus(score);
+  const showFinalScore = score?.status === "finished" && isScoreVisible(score);
+
+  if (score?.status === "finished") {
+    return (
+      <div
+        className="match-score-display match-score-finished"
+        aria-label={showFinalScore ? `Kết thúc, tỷ số ${score.homeScore} - ${score.awayScore}` : "Kết thúc"}
+      >
+        {showFinalScore && (
+          <div className="match-scoreline data">
+            <strong>{score.homeScore}</strong>
+            <span>-</span>
+            <strong>{score.awayScore}</strong>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`match-score-display match-score-${score?.status ?? "scheduled"}`} aria-label={statusLabel}>

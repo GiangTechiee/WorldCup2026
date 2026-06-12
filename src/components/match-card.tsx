@@ -3,7 +3,7 @@ import { MapPinIcon } from "@phosphor-icons/react/dist/ssr";
 import { FavoriteButton } from "@/components/favorite-button";
 import { LiveScoreDisplay } from "@/components/live-score-display";
 import { TeamFlag } from "@/components/team-flag";
-import { getTeam, type Match } from "@/lib/worldcup";
+import { formatKickoff, getTeam, type Match } from "@/lib/worldcup";
 
 export function MatchCard({ match, featured = false }: { match: Match; featured?: boolean }) {
   const homeTeam = getTeam(match.homeTeam);
@@ -13,6 +13,7 @@ export function MatchCard({ match, featured = false }: { match: Match; featured?
     <article className={featured ? "match-card match-card-featured" : "match-card"}>
       <div className="match-meta">
         <span className="data">#{String(match.number).padStart(3, "0")}</span>
+        <time dateTime={match.kickoffAt}>{formatKickoff(match.kickoffAt)}</time>
         <span>{match.group ?? match.round}</span>
       </div>
       <Link className="match-main" href={`/tran-dau/${match.id}`}>

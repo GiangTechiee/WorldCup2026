@@ -1,11 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { SoccerBall } from "@phosphor-icons/react";
 import { FavoriteButton } from "@/components/favorite-button";
 import { TeamFlag } from "@/components/team-flag";
-import type { LiveMatchEvent, LiveMatchScore, LiveScoresResponse } from "@/lib/live-score";
+import type {
+  LiveMatchEvent,
+  LiveMatchScore,
+  LiveScoresResponse,
+  MatchDetailsResponse,
+  MatchLineup,
+  MatchStatistic,
+} from "@/lib/live-score";
+import { isScoreVisible } from "@/lib/live-score";
 import { formatKickoff, type Match } from "@/lib/worldcup";
 
 type TeamSummary = {
@@ -26,8 +34,58 @@ const statusLabel = (score: LiveMatchScore | null) => {
 
 const eventLabel = (event: LiveMatchEvent) => {
   if (event.type.toLowerCase() === "goal") return "Bàn thắng";
+  if (event.detail.toLowerCase().includes("yellow")) return "Thẻ vàng";
+  if (event.detail.toLowerCase().includes("red")) return "Thẻ đỏ";
+  if (event.type.toLowerCase() === "subst") return "Thay người";
   return event.detail || event.type;
 };
+
+const isGoal = (event: LiveMatchEvent) => event.type.toLowerCase() === "goal";
+
+const statisticLabels: Record<string, string> = {
+  "Shots on Goal": "Sút trúng đích",
+  "Shots off Goal": "Sút không trúng đích",
+  "Total Shots": "Tổng số cú sút",
+  "Blocked Shots": "Sút bị cản",
+  "Shots insidebox": "Sút trong vòng cấm",
+  "Shots outsidebox": "Sút ngoài vòng cấm",
+  Fouls: "Phạm lỗi",
+  "Corner Kicks": "Phạt góc",
+  Offsides: "Việt vị",
+  "Ball Possession": "Kiểm soát bóng",
+  "Yellow Cards": "Thẻ vàng",
+  "Red Cards": "Thẻ đỏ",
+  "Goalkeeper Saves": "Cứu thua",
+  "Total passes": "Lượt chuyền bóng",
+  "Passes accurate": "Chuyền chính xác",
+  "Passes %": "Tỷ lệ chuyền chính xác",
+  expected_goals: "Bàn thắng kỳ vọng (xG)",
+};
+
+const statisticOrder = [
+  "Total Shots",
+  "Shots on Goal",
+  "Ball Possession",
+  "Total passes",
+  "Passes %",
+  "Fouls",
+  "Yellow Cards",
+  "Red Cards",
+  "Offsides",
+  "Corner Kicks",
+  "Goalkeeper Saves",
+  "expected_goals",
+];
+
+const sortStatistics = (statistics: MatchStatistic[]) =>
+  [...statistics].sort((left, right) => {
+    const leftIndex = statisticOrder.indexOf(left.type);
+    const rightIndex = statisticOrder.indexOf(right.type);
+    if (leftIndex === -1 && rightIndex === -1) return left.type.localeCompare(right.type);
+    if (leftIndex === -1) return 1;
+    if (rightIndex === -1) return -1;
+    return leftIndex - rightIndex;
+  });
 
 const eventSide = (event: LiveMatchEvent, homeName: string, awayName: string) => {
   if (event.teamName === homeName) return "home";
@@ -35,7 +93,7 @@ const eventSide = (event: LiveMatchEvent, homeName: string, awayName: string) =>
   return "neutral";
 };
 
-function TeamColumn({ seed, team }: { seed: string; team: TeamSummary }) {
+function TeamColumn({ team }: { team: TeamSummary }) {
   const content = (
     <>
       <TeamFlag className="match-center-flag" countryCode={team.countryCode} label={team.name} />
@@ -46,7 +104,6 @@ function TeamColumn({ seed, team }: { seed: string; team: TeamSummary }) {
   return (
     <div className="match-center-team">
       {team.id ? <Link href={`/doi-tuyen/${team.id}`}>{content}</Link> : content}
-      <span>{seed}</span>
     </div>
   );
 }
@@ -66,6 +123,68 @@ function MissingData({
   );
 }
 
+function EventGlyph({ event }: { event: LiveMatchEvent }) {
+  const detail = event.detail.toLowerCase();
+  if (isGoal(event)) return <SoccerBall size={16} weight="fill" aria-hidden="true" />;
+  if (detail.includes("yellow")) return <span className="match-card-glyph match-card-yellow" aria-label="Thẻ vàng" />;
+  if (detail.includes("red")) return <span className="match-card-glyph match-card-red" aria-label="Thẻ đỏ" />;
+  return <span className="match-event-glyph" aria-hidden="true" />;
+}
+
+const lineupRows = (lineup: MatchLineup) => {
+  const formation = lineup.formation
+    ?.split("-")
+    .map(Number)
+    .filter((value) => Number.isFinite(value) && value > 0) ?? [];
+  const goalkeeper = lineup.starters.find((player) => player.position === "G") ?? lineup.starters[0];
+  const outfield = lineup.starters.filter((player) => player !== goalkeeper);
+
+  if (!formation.length || formation.reduce((total, value) => total + value, 0) !== outfield.length) {
+    return goalkeeper ? [[goalkeeper], outfield] : [outfield];
+  }
+
+  const rows = goalkeeper ? [[goalkeeper]] : [];
+  let offset = 0;
+  for (const rowSize of formation) {
+    rows.push(outfield.slice(offset, offset + rowSize));
+    offset += rowSize;
+  }
+  return rows;
+};
+
+function PitchPlayer({ player }: { player: MatchLineup["starters"][number] }) {
+  const shortName = player.name.split(" ").at(-1) ?? player.name;
+  return (
+    <div className="match-pitch-player">
+      <span className="data">{player.number ?? "-"}</span>
+      <strong title={player.name}>{shortName}</strong>
+    </div>
+  );
+}
+
+function PitchTeam({ lineup, reversed = false }: { lineup: MatchLineup; reversed?: boolean }) {
+  const rows = lineupRows(lineup);
+  const displayRows = reversed ? [...rows].reverse() : rows;
+
+  return (
+    <section className={`match-pitch-team${reversed ? " match-pitch-team-reversed" : ""}`}>
+      <header>
+        <strong>{lineup.teamName}</strong>
+        {lineup.formation && <span className="data">{lineup.formation}</span>}
+      </header>
+      <div className="match-pitch-formation">
+        {displayRows.map((row, rowIndex) => (
+          <div className="match-pitch-row" key={`${lineup.teamName}-row-${rowIndex}`}>
+            {row.map((player, playerIndex) => (
+              <PitchPlayer player={player} key={`${player.id ?? player.name}-${playerIndex}`} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function MatchCenter({
   away,
   home,
@@ -77,7 +196,9 @@ export function MatchCenter({
 }) {
   const [activeTab, setActiveTab] = useState<"events" | "lineups" | "stats">("events");
   const [score, setScore] = useState<LiveMatchScore | null>(null);
+  const [details, setDetails] = useState<MatchDetailsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -109,11 +230,40 @@ export function MatchCenter({
     };
   }, [match.id]);
 
-  const events = useMemo(() => score?.events ?? [], [score?.events]);
-  const homeEvents = events.filter((event) => eventSide(event, match.homeTeam, match.awayTeam) === "home");
-  const awayEvents = events.filter((event) => eventSide(event, match.homeTeam, match.awayTeam) === "away");
+  useEffect(() => {
+    let isMounted = true;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const loadDetails = async () => {
+      try {
+        const response = await fetch(`/api/match-details?matchId=${match.id}`, { cache: "no-store" });
+        const payload = (await response.json()) as MatchDetailsResponse;
+        if (!isMounted) return;
+        setDetails(payload);
+        setDetailsError(payload.error ?? null);
+      } catch (fetchError) {
+        if (!isMounted) return;
+        setDetailsError(fetchError instanceof Error ? fetchError.message : "Không tải được chi tiết trận đấu");
+      } finally {
+        if (isMounted) timeoutId = setTimeout(loadDetails, 60_000);
+      }
+    };
+
+    void loadDetails();
+
+    return () => {
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [match.id]);
+
+  const events = details?.events.length ? details.events : score?.events ?? [];
+  const goalEvents = events.filter(isGoal);
+  const homeEvents = goalEvents.filter((event) => eventSide(event, match.homeTeam, match.awayTeam) === "home");
+  const awayEvents = goalEvents.filter((event) => eventSide(event, match.homeTeam, match.awayTeam) === "away");
   const homeScore = score?.homeScore;
   const awayScore = score?.awayScore;
+  const showScore = score ? isScoreVisible(score) : false;
 
   return (
     <section className="match-center-shell">
@@ -124,15 +274,22 @@ export function MatchCenter({
         </div>
 
         <div className="match-center-scoreboard">
-          <TeamColumn seed="chủ nhà" team={home} />
+          <TeamColumn team={home} />
 
-          <div className="match-center-score data" aria-label={`Tỉ số ${homeScore ?? "-"} - ${awayScore ?? "-"}`}>
-            <strong>{homeScore ?? ""}</strong>
-            <span>-</span>
-            <strong>{awayScore ?? ""}</strong>
+          <div
+            className="match-center-score data"
+            aria-label={showScore ? `Tỉ số ${homeScore} - ${awayScore}` : "Chưa có tỷ số"}
+          >
+            {showScore && (
+              <>
+                <strong>{homeScore}</strong>
+                <span>-</span>
+                <strong>{awayScore}</strong>
+              </>
+            )}
           </div>
 
-          <TeamColumn seed="đội khách" team={away} />
+          <TeamColumn team={away} />
         </div>
 
         <div className="match-center-stage">{match.group ?? match.round}</div>
@@ -190,7 +347,7 @@ export function MatchCenter({
               events.map((event, index) => (
                 <div className="match-event-row" key={`${event.elapsed}-${event.type}-${index}`}>
                   <span className="data">{event.elapsed ?? "-"}&apos;</span>
-                  <SoccerBall size={16} weight={event.type === "Goal" ? "fill" : "regular"} />
+                  <EventGlyph event={event} />
                   <div>
                     <strong>{eventLabel(event)}</strong>
                     <p>{event.teamName}{event.playerName ? ` · ${event.playerName}` : ""}</p>
@@ -199,22 +356,47 @@ export function MatchCenter({
               ))
             ) : (
               <MissingData title="Chưa có diễn biến chi tiết">
-                {error ?? "Nguồn worldcup26.ir hiện chưa cung cấp timeline cho trận này."}
+                {detailsError ?? error ?? "Nguồn dữ liệu chưa cung cấp timeline cho trận này."}
               </MissingData>
             )}
           </div>
         )}
 
         {activeTab === "lineups" && (
-          <MissingData title="Cần thêm nguồn đội hình">
-            Để hiển thị giống Google, cần API có đội hình xuất phát, dự bị, sơ đồ chiến thuật và huấn luyện viên cho từng fixture.
-          </MissingData>
+          details?.lineups.length ? (
+            <div className="match-lineup-pitch">
+              {details.lineups[0] && <PitchTeam lineup={details.lineups[0]} />}
+              <div className="match-pitch-center" aria-hidden="true"><span /></div>
+              {details.lineups[1] && <PitchTeam lineup={details.lineups[1]} reversed />}
+            </div>
+          ) : (
+            <MissingData title="Chưa có đội hình ra sân">
+              {detailsError ?? "Đội hình thường được cập nhật gần giờ bóng lăn."}
+            </MissingData>
+          )
         )}
 
         {activeTab === "stats" && (
-          <MissingData title="Cần thêm nguồn thống kê trận">
-            Để lấy đủ như Google, cần API có kiểm soát bóng, cú sút, sút trúng đích, phạt góc, thẻ, lỗi, việt vị và các chỉ số theo đội.
-          </MissingData>
+          details?.statistics.length ? (
+            <div className="match-statistics">
+              <div className="match-statistics-head">
+                <strong>{home.name}</strong>
+                <span>Thống kê đội</span>
+                <strong>{away.name}</strong>
+              </div>
+              {sortStatistics(details.statistics).map((statistic) => (
+                <div className="match-statistic-row" key={statistic.type}>
+                  <strong className="data">{statistic.home ?? "-"}</strong>
+                  <span>{statisticLabels[statistic.type] ?? statistic.type}</span>
+                  <strong className="data">{statistic.away ?? "-"}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <MissingData title="Chưa có thống kê trận đấu">
+              {detailsError ?? "Thống kê sẽ xuất hiện khi nhà cung cấp bắt đầu ghi nhận trận đấu."}
+            </MissingData>
+          )
         )}
       </div>
 

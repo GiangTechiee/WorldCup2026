@@ -43,6 +43,39 @@ export type LiveScoresResponse = {
   error?: string;
 };
 
+export type MatchLineupPlayer = {
+  id: number | null;
+  name: string;
+  number: number | null;
+  position: string | null;
+  grid: string | null;
+};
+
+export type MatchLineup = {
+  teamName: string;
+  formation: string | null;
+  coachName: string | null;
+  starters: MatchLineupPlayer[];
+  substitutes: MatchLineupPlayer[];
+};
+
+export type MatchStatistic = {
+  type: string;
+  home: string | number | null;
+  away: string | number | null;
+};
+
+export type MatchDetailsResponse = {
+  source: "espn" | "api-football" | "unconfigured" | "fallback";
+  configured: boolean;
+  fixtureId: number | null;
+  updatedAt: string;
+  events: LiveMatchEvent[];
+  lineups: MatchLineup[];
+  statistics: MatchStatistic[];
+  error?: string;
+};
+
 export const statusFromApiFootball = (shortStatus: string | null | undefined): LiveMatchStatus => {
   switch (shortStatus) {
     case "TBD":

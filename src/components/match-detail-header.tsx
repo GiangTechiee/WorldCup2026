@@ -101,7 +101,7 @@ export function MatchDetailHeader({
               <strong>{score.awayScore}</strong>
             </div>
           ) : (
-            <div className="match-summary-vs">VS</div>
+            <div className="match-summary-score-empty" aria-label="Chưa có tỷ số" />
           )}
           <small>Giờ Việt Nam</small>
         </div>
