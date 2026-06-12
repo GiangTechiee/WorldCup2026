@@ -6,7 +6,9 @@ import { MatchCard } from "@/components/match-card";
 import { KnockoutBracket } from "@/components/knockout-bracket";
 import { PageHeading } from "@/components/page-heading";
 import { knockoutRoundLabels } from "@/lib/match-slots";
+import { createTeamResolver } from "@/lib/resolved-teams";
 import { matches, teams } from "@/lib/worldcup";
+import { getWorldCup26LiveScores, getWorldCup26Standings } from "@/lib/worldcup26-api";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -43,6 +45,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
       (!date || match.date === date) &&
       (!team || match.homeTeam === team || match.awayTeam === team),
   );
+  const [liveScores, standings] = await Promise.all([
+    getWorldCup26LiveScores().catch(() => []),
+    getWorldCup26Standings().catch(() => []),
+  ]);
+  const resolveTeam = createTeamResolver({ matches, scores: liveScores, standings });
   const sections = scheduleSections(filtered);
 
   return (
@@ -64,7 +71,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
       </nav>
 
       {view === "bracket" ? (
-        <KnockoutBracket matches={matches.filter((match) => !match.group)} />
+        <KnockoutBracket matches={matches.filter((match) => !match.group)} resolveTeam={resolveTeam} />
       ) : (
         <>
           <form className="filter-bar">
@@ -96,7 +103,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
                       <span className="data">{section.matches.length} trận</span>
                     </header>
                     <div className="match-list">
-                      {section.matches.map((match) => <MatchCard match={match} key={match.id} />)}
+                      {section.matches.map((match) => (
+                        <MatchCard
+                          awayDisplay={resolveTeam(match.awayTeam)}
+                          homeDisplay={resolveTeam(match.homeTeam)}
+                          key={match.id}
+                          match={match}
+                        />
+                      ))}
                     </div>
                   </section>
                 ))}

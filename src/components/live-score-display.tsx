@@ -30,6 +30,7 @@ export function LiveScoreDisplay({
   const liveScores = useLiveScores();
   const score = liveScores?.scoresByMatchId[matchId];
   const statusLabel = labelForStatus(score);
+  const visibleScore = score && isScoreVisible(score) ? score : null;
   const showFinalScore = score?.status === "finished" && isScoreVisible(score);
 
   if (score?.status === "finished") {
@@ -51,6 +52,13 @@ export function LiveScoreDisplay({
 
   return (
     <div className={`match-score-display match-score-${score?.status ?? "scheduled"}`} aria-label={statusLabel}>
+      {visibleScore && (
+        <div className="match-scoreline data">
+          <strong>{visibleScore.homeScore}</strong>
+          <span>-</span>
+          <strong>{visibleScore.awayScore}</strong>
+        </div>
+      )}
       <div className="match-score-kicker">
         <span className="match-score-status">{statusLabel}</span>
         {score?.elapsed != null && score.status === "live" && (

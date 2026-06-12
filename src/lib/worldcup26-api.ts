@@ -80,8 +80,10 @@ const parseNullableNumber = (value: string | number | null | undefined) => {
 };
 
 const statusFromWorldCup26 = (game: WorldCup26Game): LiveMatchStatus => {
+  const elapsed = game.time_elapsed?.toLowerCase() ?? "";
   if (game.finished === "TRUE") return "finished";
-  if (game.finished === "FALSE" && game.time_elapsed && game.time_elapsed !== "notstarted") {
+  if (["ht", "half-time", "halftime", "half time", "break"].includes(elapsed)) return "halftime";
+  if (game.finished === "FALSE" && game.time_elapsed && elapsed !== "notstarted") {
     return "live";
   }
   return "scheduled";
@@ -89,12 +91,14 @@ const statusFromWorldCup26 = (game: WorldCup26Game): LiveMatchStatus => {
 
 const statusShortFromWorldCup26 = (status: LiveMatchStatus) => {
   if (status === "finished") return "FT";
+  if (status === "halftime") return "HT";
   if (status === "live") return "LIVE";
   return "NS";
 };
 
 const statusLongFromWorldCup26 = (status: LiveMatchStatus) => {
   if (status === "finished") return "Match Finished";
+  if (status === "halftime") return "Half Time";
   if (status === "live") return "Live";
   return "Not Started";
 };

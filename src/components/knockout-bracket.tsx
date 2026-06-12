@@ -2,6 +2,7 @@ import Link from "next/link";
 import { TrophyIcon } from "@phosphor-icons/react/dist/ssr";
 import { DragScroll } from "@/components/drag-scroll";
 import { knockoutRoundLabels, slotLabel, sourceMatchNumber } from "@/lib/match-slots";
+import type { DisplayTeam } from "@/lib/resolved-teams";
 import { formatKickoff, type Match } from "@/lib/worldcup";
 
 const roundOrder = ["Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Final"] as const;
@@ -30,12 +31,16 @@ const childNumbers = (match: Match) =>
   );
 
 function BracketMatch({
+  awayDisplay,
   embedded = false,
+  homeDisplay,
   match,
   x,
   y,
 }: BracketNode & {
+  awayDisplay?: DisplayTeam;
   embedded?: boolean;
+  homeDisplay?: DisplayTeam;
 }) {
   return (
     <Link
@@ -55,8 +60,8 @@ function BracketMatch({
         <strong className="data">#{match.number}</strong>
         <time dateTime={match.kickoffAt}>{formatKickoff(match.kickoffAt)}</time>
       </div>
-      <span>{slotLabel(match.homeTeam)}</span>
-      <span>{slotLabel(match.awayTeam)}</span>
+      <span>{homeDisplay?.name ?? slotLabel(match.homeTeam)}</span>
+      <span>{awayDisplay?.name ?? slotLabel(match.awayTeam)}</span>
       <small>{match.ground}</small>
     </Link>
   );
@@ -83,7 +88,13 @@ function BracketConnector({ from, to }: { from: BracketNode; to: BracketNode }) 
   );
 }
 
-export function KnockoutBracket({ matches }: { matches: Match[] }) {
+export function KnockoutBracket({
+  matches,
+  resolveTeam,
+}: {
+  matches: Match[];
+  resolveTeam?: (slot: string) => DisplayTeam;
+}) {
   const matchesByNumber = new Map(matches.map((match) => [match.number, match]));
   const yByNumber = new Map<number, number>();
   let leafIndex = 0;
@@ -214,7 +225,14 @@ export function KnockoutBracket({ matches }: { matches: Match[] }) {
           ))}
 
           {rounds.flatMap(({ nodes }) =>
-            nodes.map((node) => <BracketMatch key={node.match.id} {...node} />),
+            nodes.map((node) => (
+              <BracketMatch
+                awayDisplay={resolveTeam?.(node.match.awayTeam)}
+                homeDisplay={resolveTeam?.(node.match.homeTeam)}
+                key={node.match.id}
+                {...node}
+              />
+            )),
           )}
 
           {thirdPlace && finalNode && (
@@ -229,7 +247,14 @@ export function KnockoutBracket({ matches }: { matches: Match[] }) {
               }}
             >
               <strong>Tranh hạng ba</strong>
-              <BracketMatch embedded match={thirdPlace} x={0} y={0} />
+              <BracketMatch
+                awayDisplay={resolveTeam?.(thirdPlace.awayTeam)}
+                embedded
+                homeDisplay={resolveTeam?.(thirdPlace.homeTeam)}
+                match={thirdPlace}
+                x={0}
+                y={0}
+              />
             </div>
           )}
         </div>
