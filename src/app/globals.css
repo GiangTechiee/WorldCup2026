@@ -532,6 +532,36 @@ a {
   gap: 0.75rem;
 }
 
+.schedule-sections {
+  display: grid;
+  gap: 1.35rem;
+}
+
+.schedule-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.schedule-section > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.45rem;
+}
+
+.schedule-section h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(1.15rem, 2.4vw, 1.6rem);
+}
+
+.schedule-section > header span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
 .schedule-view-switch {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -567,29 +597,56 @@ a {
 
 .bracket-scroll {
   overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: #171513;
   color: white;
-  scrollbar-color: var(--fire) #292522;
+  cursor: grab;
+  scrollbar-width: none;
+  touch-action: pan-y;
+  user-select: none;
 }
 
-.bracket-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(14rem, 1fr));
-  gap: 2.2rem;
-  min-width: 82rem;
-  min-height: 96rem;
-  padding: 1rem 1.2rem 1.5rem;
+.bracket-scroll::-webkit-scrollbar {
+  display: none;
 }
 
-.bracket-round {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  min-width: 0;
+.bracket-scroll.is-dragging {
+  cursor: grabbing;
 }
 
-.bracket-round > header {
+.bracket-board {
+  position: relative;
+  min-width: 105rem;
+  background:
+    radial-gradient(circle at 50% 42%, rgb(255 201 64 / 8%), transparent 28rem),
+    linear-gradient(180deg, rgb(255 255 255 / 3%), transparent 18rem),
+    #171513;
+}
+
+.bracket-connectors {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.bracket-connector {
+  fill: none;
+  stroke: #c58c18;
+  stroke-linecap: square;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.bracket-round-header {
+  position: absolute;
+  z-index: 3;
+}
+
+.bracket-round-header > header {
   display: flex;
   min-height: 3rem;
   align-items: center;
@@ -600,22 +657,16 @@ a {
   text-align: center;
 }
 
-.bracket-round > header span {
+.bracket-round-header > header span {
   color: #aaa39c;
   font-size: 0.62rem;
 }
 
-.bracket-round-matches {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-around;
-  gap: 0.55rem;
-  padding-block: 0.8rem;
-}
-
 .bracket-match {
-  position: relative;
+  position: absolute;
+  z-index: 2;
   display: grid;
+  grid-template-rows: 1.55rem minmax(1.45rem, auto) minmax(1.45rem, auto) 1.35rem;
   overflow: visible;
   border: 1px solid #4b443e;
   border-radius: 0.4rem;
@@ -624,36 +675,42 @@ a {
   box-shadow: 0 0.35rem 0.9rem rgb(0 0 0 / 18%);
 }
 
-.bracket-round:not(:last-child) .bracket-match::after {
-  position: absolute;
-  top: 50%;
-  left: 100%;
-  width: 2.2rem;
-  height: 1px;
-  background: #b57f13;
-  content: "";
-}
-
 .bracket-match:hover {
   border-color: #ffc940;
+  z-index: 4;
+}
+
+.bracket-match:active {
+  cursor: grabbing;
 }
 
 .bracket-match-meta {
   display: flex;
+  min-width: 0;
   justify-content: space-between;
   gap: 0.5rem;
   border-bottom: 1px solid #403a35;
-  padding: 0.35rem 0.5rem;
+  padding: 0.34rem 0.6rem 0.25rem;
   color: #aaa39c;
   font-size: 0.58rem;
+  line-height: 1.1;
+}
+
+.bracket-match-meta time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bracket-match > span {
+  display: flex;
   min-width: 0;
   overflow: hidden;
-  padding: 0.38rem 0.5rem;
-  font-size: 0.7rem;
+  align-items: center;
+  padding: 0.28rem 0.6rem;
+  font-size: 0.72rem;
   font-weight: 800;
+  line-height: 1.22;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -663,24 +720,29 @@ a {
 }
 
 .bracket-match > small {
+  display: block;
   overflow: hidden;
   border-top: 1px solid #403a35;
-  padding: 0.32rem 0.5rem;
+  padding: 0.25rem 0.6rem 0.32rem;
   color: #aaa39c;
   font-size: 0.56rem;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .bracket-third-place {
-  display: grid;
+  position: absolute;
+  z-index: 3;
+  display: block;
   gap: 0.55rem;
-  margin-top: 1rem;
   border-top: 1px solid #4b443e;
-  padding-top: 1rem;
+  padding-top: 1.55rem;
 }
 
 .bracket-third-place > strong {
+  display: block;
+  margin-bottom: 0.7rem;
   color: #ffc940;
   font-size: 0.72rem;
   text-align: center;
@@ -778,6 +840,10 @@ a {
   white-space: nowrap;
 }
 
+.team-line-slot strong {
+  font-size: 0.9rem;
+}
+
 .team-line-away {
   justify-content: flex-end;
   text-align: right;
@@ -811,6 +877,10 @@ a {
   display: grid;
   gap: 0.2rem;
   text-align: center;
+}
+
+.match-slot-placeholder::before {
+  content: "";
 }
 
 .match-time strong {

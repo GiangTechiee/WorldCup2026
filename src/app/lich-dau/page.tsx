@@ -1,12 +1,37 @@
+import Link from "next/link";
+import { GitBranchIcon, ListBulletsIcon } from "@phosphor-icons/react/dist/ssr";
 import { LiveScoresNotice } from "@/components/live-scores-notice";
 import { LiveScoresProvider } from "@/components/live-scores-provider";
 import { MatchCard } from "@/components/match-card";
+import { KnockoutBracket } from "@/components/knockout-bracket";
 import { PageHeading } from "@/components/page-heading";
+import { knockoutRoundLabels } from "@/lib/match-slots";
 import { matches, teams } from "@/lib/worldcup";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export const metadata = { title: "Lịch đấu" };
+
+const sectionOrder = [
+  "Vòng bảng",
+  "Vòng 32 đội",
+  "Vòng 16 đội",
+  "Tứ kết",
+  "Bán kết",
+  "Tranh hạng ba",
+  "Chung kết",
+];
+
+const sectionTitle = (match: (typeof matches)[number]) =>
+  match.group ? "Vòng bảng" : knockoutRoundLabels[match.round] ?? match.round;
+
+const scheduleSections = (items: typeof matches) =>
+  sectionOrder
+    .map((title) => ({
+      title,
+      matches: items.filter((match) => sectionTitle(match) === title),
+    }))
+    .filter((section) => section.matches.length);
 
 export default async function SchedulePage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -18,6 +43,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
       (!date || match.date === date) &&
       (!team || match.homeTeam === team || match.awayTeam === team),
   );
+  const sections = scheduleSections(filtered);
 
   return (
     <div className="page-shell section-space">
@@ -62,8 +88,18 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
           <LiveScoresProvider>
             <LiveScoresNotice />
             {filtered.length ? (
-              <div className="match-list">
-                {filtered.map((match) => <MatchCard match={match} key={match.id} />)}
+              <div className="schedule-sections">
+                {sections.map((section) => (
+                  <section className="schedule-section" key={section.title}>
+                    <header>
+                      <h2>{section.title}</h2>
+                      <span className="data">{section.matches.length} trận</span>
+                    </header>
+                    <div className="match-list">
+                      {section.matches.map((match) => <MatchCard match={match} key={match.id} />)}
+                    </div>
+                  </section>
+                ))}
               </div>
             ) : (
               <div className="empty-state">
@@ -77,6 +113,3 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
     </div>
   );
 }
-import Link from "next/link";
-import { GitBranchIcon, ListBulletsIcon } from "@phosphor-icons/react/dist/ssr";
-import { KnockoutBracket } from "@/components/knockout-bracket";

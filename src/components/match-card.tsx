@@ -3,12 +3,35 @@ import { MapPinIcon } from "@phosphor-icons/react/dist/ssr";
 import { FavoriteButton } from "@/components/favorite-button";
 import { LiveScoreDisplay } from "@/components/live-score-display";
 import { TeamFlag } from "@/components/team-flag";
+import { isPlaceholderSlot, slotLabel } from "@/lib/match-slots";
 import { formatKickoff, getTeam, type Match } from "@/lib/worldcup";
 
-export function MatchCard({ match, featured = false }: { match: Match; featured?: boolean }) {
-  const homeTeam = getTeam(match.homeTeam);
-  const awayTeam = getTeam(match.awayTeam);
+function TeamLine({
+  align = "left",
+  name,
+}: {
+  align?: "left" | "right";
+  name: string;
+}) {
+  const team = getTeam(name);
+  const isSlot = !team && isPlaceholderSlot(name);
+  const label = isSlot ? slotLabel(name) : name;
+  const flagOrSlot = team ? (
+    <TeamFlag countryCode={team.countryCode} label={name} />
+  ) : (
+    <span className="flag-placeholder match-slot-placeholder" aria-label="Chưa xác định đội" />
+  );
 
+  return (
+    <div className={`team-line${align === "right" ? " team-line-away" : ""}${isSlot ? " team-line-slot" : ""}`}>
+      {align === "left" && flagOrSlot}
+      <strong>{label}</strong>
+      {align === "right" && flagOrSlot}
+    </div>
+  );
+}
+
+export function MatchCard({ match, featured = false }: { match: Match; featured?: boolean }) {
   return (
     <article className={featured ? "match-card match-card-featured" : "match-card"}>
       <div className="match-meta">
@@ -17,15 +40,9 @@ export function MatchCard({ match, featured = false }: { match: Match; featured?
         <span>{match.group ?? match.round}</span>
       </div>
       <Link className="match-main" href={`/tran-dau/${match.id}`}>
-        <div className="team-line">
-          <TeamFlag countryCode={homeTeam?.countryCode ?? ""} label={match.homeTeam} />
-          <strong>{match.homeTeam}</strong>
-        </div>
+        <TeamLine name={match.homeTeam} />
         <LiveScoreDisplay kickoffAt={match.kickoffAt} matchId={match.id} />
-        <div className="team-line team-line-away">
-          <strong>{match.awayTeam}</strong>
-          <TeamFlag countryCode={awayTeam?.countryCode ?? ""} label={match.awayTeam} />
-        </div>
+        <TeamLine align="right" name={match.awayTeam} />
       </Link>
       <div className="match-footer">
         <span>
