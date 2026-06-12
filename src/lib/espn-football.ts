@@ -34,8 +34,14 @@ type EspnRosterEntry = {
   starter?: boolean;
   jersey?: string;
   athlete?: {
+    headshot?: {
+      href?: string;
+    };
     id?: string;
     displayName?: string;
+    jerseyImages?: Array<{
+      href?: string;
+    }>;
   };
   position?: {
     abbreviation?: string;
@@ -176,6 +182,7 @@ const toEvents = (summary: EspnSummary): LiveMatchEvent[] =>
 
 const toPlayer = (entry: EspnRosterEntry): MatchLineupPlayer => ({
   id: entry.athlete?.id ? Number(entry.athlete.id) : null,
+  imageUrl: entry.athlete?.headshot?.href ?? entry.athlete?.jerseyImages?.[0]?.href ?? null,
   name: entry.athlete?.displayName ?? "Chưa xác định",
   number: entry.jersey ? Number(entry.jersey) : null,
   position: entry.position?.abbreviation ?? null,

@@ -1815,33 +1815,27 @@ a {
 }
 
 .match-pitch-formation {
-  display: grid;
-  grid-auto-rows: 1fr;
-  align-items: center;
+  position: relative;
+  min-height: 25rem;
   padding: 0.6rem 1.5rem;
 }
 
-.match-pitch-row {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 0.35rem;
-  align-items: center;
-  justify-items: center;
-}
-
 .match-pitch-player {
+  position: absolute;
   display: grid;
+  width: 5.2rem;
   min-width: 0;
   justify-items: center;
   gap: 0.22rem;
   text-align: center;
+  transform: translate(-50%, -50%);
 }
 
 .match-pitch-player > span {
   display: grid;
-  width: 2.15rem;
+  width: 2.45rem;
   aspect-ratio: 1;
+  overflow: hidden;
   place-items: center;
   border: 2px solid rgb(255 255 255 / 78%);
   border-radius: 50%;
@@ -1852,10 +1846,19 @@ a {
   font-weight: 900;
 }
 
+.match-pitch-player img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .match-pitch-player strong {
   width: 100%;
   overflow: hidden;
+  color: #07140a;
   font-size: 0.68rem;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1953,12 +1956,17 @@ a {
   }
 
   .match-pitch-formation {
+    min-height: 22rem;
     padding-inline: 0.55rem;
   }
 
   .match-pitch-player > span {
-    width: 1.8rem;
+    width: 2rem;
     font-size: 0.64rem;
+  }
+
+  .match-pitch-player {
+    width: 4.3rem;
   }
 
   .match-pitch-player strong {

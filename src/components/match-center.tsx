@@ -131,41 +131,71 @@ function EventGlyph({ event }: { event: LiveMatchEvent }) {
   return <span className="match-event-glyph" aria-hidden="true" />;
 }
 
-const lineupRows = (lineup: MatchLineup) => {
-  const formation = lineup.formation
-    ?.split("-")
-    .map(Number)
-    .filter((value) => Number.isFinite(value) && value > 0) ?? [];
-  const goalkeeper = lineup.starters.find((player) => player.position === "G") ?? lineup.starters[0];
-  const outfield = lineup.starters.filter((player) => player !== goalkeeper);
-
-  if (!formation.length || formation.reduce((total, value) => total + value, 0) !== outfield.length) {
-    return goalkeeper ? [[goalkeeper], outfield] : [outfield];
-  }
-
-  const rows = goalkeeper ? [[goalkeeper]] : [];
-  let offset = 0;
-  for (const rowSize of formation) {
-    rows.push(outfield.slice(offset, offset + rowSize));
-    offset += rowSize;
-  }
-  return rows;
+const pitchY = (position: string | null) => {
+  const value = position ?? "";
+  if (value === "G") return 9;
+  if (value.startsWith("CD") || value === "LB" || value === "RB") return 28;
+  if (value === "DM") return 43;
+  if (value.startsWith("CM")) return 58;
+  if (value === "LM" || value === "RM" || value.includes("W")) return 72;
+  if (value === "F" || value.startsWith("CF") || value.includes("ST")) return 86;
+  return 58;
 };
 
-function PitchPlayer({ player }: { player: MatchLineup["starters"][number] }) {
+const pitchX = (position: string | null, reversed: boolean) => {
+  const value = position ?? "";
+  const left = reversed ? 18 : 82;
+  const leftCenter = reversed ? 36 : 64;
+  const rightCenter = reversed ? 64 : 36;
+  const right = reversed ? 82 : 18;
+
+  if (value === "G" || value === "F" || value === "CF" || value === "CM" || value === "DM" || value === "CD") return 50;
+  if (value.endsWith("-L")) return leftCenter;
+  if (value.endsWith("-R")) return rightCenter;
+  if (value === "LB" || value === "LM" || value === "LW") return left;
+  if (value === "RB" || value === "RM" || value === "RW") return right;
+  return 50;
+};
+
+const pitchCoordinates = (player: MatchLineup["starters"][number], reversed: boolean) => {
+  const baseY = pitchY(player.position);
+  return {
+    x: pitchX(player.position, reversed),
+    y: reversed ? 100 - baseY : baseY,
+  };
+};
+
+function PitchPlayer({
+  player,
+  reversed = false,
+}: {
+  player: MatchLineup["starters"][number];
+  reversed?: boolean;
+}) {
+  const coordinates = pitchCoordinates(player, reversed);
   const shortName = player.name.split(" ").at(-1) ?? player.name;
   return (
-    <div className="match-pitch-player">
-      <span className="data">{player.number ?? "-"}</span>
+    <div
+      className="match-pitch-player"
+      style={{
+        left: `${coordinates.x}%`,
+        top: `${coordinates.y}%`,
+      }}
+    >
+      <span className="data">
+        {player.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img alt="" src={player.imageUrl} />
+        ) : (
+          player.number ?? "-"
+        )}
+      </span>
       <strong title={player.name}>{shortName}</strong>
     </div>
   );
 }
 
 function PitchTeam({ lineup, reversed = false }: { lineup: MatchLineup; reversed?: boolean }) {
-  const rows = lineupRows(lineup);
-  const displayRows = reversed ? [...rows].reverse() : rows;
-
   return (
     <section className={`match-pitch-team${reversed ? " match-pitch-team-reversed" : ""}`}>
       <header>
@@ -173,12 +203,12 @@ function PitchTeam({ lineup, reversed = false }: { lineup: MatchLineup; reversed
         {lineup.formation && <span className="data">{lineup.formation}</span>}
       </header>
       <div className="match-pitch-formation">
-        {displayRows.map((row, rowIndex) => (
-          <div className="match-pitch-row" key={`${lineup.teamName}-row-${rowIndex}`}>
-            {row.map((player, playerIndex) => (
-              <PitchPlayer player={player} key={`${player.id ?? player.name}-${playerIndex}`} />
-            ))}
-          </div>
+        {lineup.starters.map((player, playerIndex) => (
+          <PitchPlayer
+            key={`${player.id ?? player.name}-${playerIndex}`}
+            player={player}
+            reversed={reversed}
+          />
         ))}
       </div>
     </section>

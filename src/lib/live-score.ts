@@ -45,6 +45,7 @@ export type LiveScoresResponse = {
 
 export type MatchLineupPlayer = {
   id: number | null;
+  imageUrl: string | null;
   name: string;
   number: number | null;
   position: string | null;
