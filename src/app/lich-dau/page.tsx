@@ -1,3 +1,5 @@
+import { LiveScoresNotice } from "@/components/live-scores-notice";
+import { LiveScoresProvider } from "@/components/live-scores-provider";
 import { MatchCard } from "@/components/match-card";
 import { PageHeading } from "@/components/page-heading";
 import { matches, teams } from "@/lib/worldcup";
@@ -18,15 +20,50 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
 
   return (
     <div className="page-shell section-space">
-      <PageHeading eyebrow="104 trận · 39 ngày" title="Lịch đấu" description="Chọn ngày hoặc đội. Link sau khi lọc có thể gửi thẳng cho hội bạn cùng thức." />
+      <PageHeading
+        eyebrow="104 trận · 39 ngày"
+        title="Lịch đấu"
+        description="Chọn ngày hoặc đội. Link sau khi lọc có thể gửi thẳng cho hội bạn cùng thức."
+      />
       <form className="filter-bar">
-        <label>Ngày<input type="date" name="date" defaultValue={date} /></label>
-        <label>Đội tuyển<select name="team" defaultValue={team}><option value="">Tất cả đội</option>{teams.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
-        <button className="button-primary" type="submit">Lọc lịch</button>
-        {(date || team) && <a className="button-secondary" href="/lich-dau">Xóa lọc</a>}
+        <label>
+          Ngày
+          <input type="date" name="date" defaultValue={date} />
+        </label>
+        <label>
+          Đội tuyển
+          <select name="team" defaultValue={team}>
+            <option value="">Tất cả đội</option>
+            {teams.map((item) => (
+              <option key={item.id}>{item.name}</option>
+            ))}
+          </select>
+        </label>
+        <button className="button-primary" type="submit">
+          Lọc lịch
+        </button>
+        {(date || team) && (
+          <a className="button-secondary" href="/lich-dau">
+            Xóa lọc
+          </a>
+        )}
       </form>
       <p className="result-count data">{filtered.length} trận phù hợp</p>
-      {filtered.length ? <div className="match-list">{filtered.map((match) => <MatchCard match={match} key={match.id} />)}</div> : <div className="empty-state"><strong>Không có trận phù hợp.</strong><p>Thử đổi ngày hoặc bớt một bộ lọc.</p></div>}
+      <LiveScoresProvider>
+        <LiveScoresNotice />
+        {filtered.length ? (
+          <div className="match-list">
+            {filtered.map((match) => (
+              <MatchCard match={match} key={match.id} />
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <strong>Không có trận phù hợp.</strong>
+            <p>Thử đổi ngày hoặc bớt một bộ lọc.</p>
+          </div>
+        )}
+      </LiveScoresProvider>
     </div>
   );
 }

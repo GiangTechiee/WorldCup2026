@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
+import { LiveScoresNotice } from "@/components/live-scores-notice";
+import { LiveScoresProvider } from "@/components/live-scores-provider";
 import { MatchCard } from "@/components/match-card";
 import { getMatchesByDate, getNextMatch, tournamentStats } from "@/lib/worldcup";
 
@@ -8,7 +10,8 @@ export default function Home() {
   const dayMatches = nextMatch ? getMatchesByDate(nextMatch.date) : [];
 
   return (
-    <>
+    <LiveScoresProvider>
+      <LiveScoresNotice />
       <section className="hero">
         <div className="page-shell hero-grid">
           <div>
@@ -54,6 +57,6 @@ export default function Home() {
           ))}
         </div>
       </section>
-    </>
+    </LiveScoresProvider>
   );
 }

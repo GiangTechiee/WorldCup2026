@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { MapPinIcon } from "@phosphor-icons/react/dist/ssr";
 import { FavoriteButton } from "@/components/favorite-button";
+import { LiveScoreDisplay } from "@/components/live-score-display";
 import { TeamFlag } from "@/components/team-flag";
-import { formatKickoff, getTeam, type Match } from "@/lib/worldcup";
+import { getTeam, type Match } from "@/lib/worldcup";
 
 export function MatchCard({ match, featured = false }: { match: Match; featured?: boolean }) {
   const homeTeam = getTeam(match.homeTeam);
@@ -19,17 +20,16 @@ export function MatchCard({ match, featured = false }: { match: Match; featured?
           <TeamFlag countryCode={homeTeam?.countryCode ?? ""} label={match.homeTeam} />
           <strong>{match.homeTeam}</strong>
         </div>
-        <div className="match-time">
-          <strong className="data">{formatKickoff(match.kickoffAt)}</strong>
-          <span>Giờ Việt Nam</span>
-        </div>
+        <LiveScoreDisplay kickoffAt={match.kickoffAt} matchId={match.id} />
         <div className="team-line team-line-away">
           <strong>{match.awayTeam}</strong>
           <TeamFlag countryCode={awayTeam?.countryCode ?? ""} label={match.awayTeam} />
         </div>
       </Link>
       <div className="match-footer">
-        <span><MapPinIcon weight="bold" aria-hidden="true" /> {match.ground}</span>
+        <span>
+          <MapPinIcon weight="bold" aria-hidden="true" /> {match.ground}
+        </span>
         <FavoriteButton id={match.id} label={`${match.homeTeam} gặp ${match.awayTeam}`} />
       </div>
     </article>

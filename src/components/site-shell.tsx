@@ -11,7 +11,7 @@ import {
 const navigation = [
   { href: "/", label: "Hôm nay", icon: HouseIcon },
   { href: "/lich-dau", label: "Lịch đấu", icon: CalendarDotsIcon },
-  { href: "/bang-dau", label: "Bảng đấu", icon: ListNumbersIcon },
+  { href: "/bang-dau", label: "Bảng xếp hạng", icon: ListNumbersIcon },
   { href: "/doi-tuyen", label: "Đội tuyển", icon: UsersThreeIcon },
   { href: "/binh-luan", label: "Bình luận", icon: ChatDotsIcon },
   { href: "/yeu-thich", label: "Đã lưu", icon: HeartIcon },
