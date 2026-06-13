@@ -100,9 +100,34 @@ const sortStatistics = (statistics: MatchStatistic[]) =>
   });
 
 const eventSide = (event: LiveMatchEvent, homeName: string, awayName: string) => {
-  if (event.teamName === homeName) return "home";
-  if (event.teamName === awayName) return "away";
-  return "neutral";
+  const teamNameAliases: Record<string, string> = {
+    "bosnia herzegovina": "bosnia and herzegovina",
+    "czech republic": "czechia",
+    "korea republic": "south korea",
+    "republic of korea": "south korea",
+    "united states": "usa",
+    "united states of america": "usa",
+  };
+  const normalize = (value: string | null | undefined) => {
+    const normalized = (value ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/&/g, "and")
+      .replace(/-/g, " ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    return teamNameAliases[normalized] ?? normalized;
+  };
+
+  const eventTeam = normalize(event.teamName);
+  const homeTeam = normalize(homeName);
+  const awayTeam = normalize(awayName);
+
+  if (!eventTeam) return "neutral";
+  if (eventTeam === homeTeam || eventTeam.includes(homeTeam) || homeTeam.includes(eventTeam)) return "home";
+  if (eventTeam === awayTeam || eventTeam.includes(awayTeam) || awayTeam.includes(eventTeam)) return "away";
+  return "away";
 };
 
 function TeamColumn({ team }: { team: TeamSummary }) {
@@ -549,6 +574,54 @@ function EventTimelineRow({
   );
 }
 
+const timelineNameAliases: Record<string, string> = {
+  "bosnia herzegovina": "bosnia and herzegovina",
+  "czech republic": "czechia",
+  "korea republic": "south korea",
+  "republic of korea": "south korea",
+  "united states": "usa",
+  "united states of america": "usa",
+};
+
+const normalizeTimelineName = (value: string | null | undefined) => {
+  const normalized = (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/-/g, " ")
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return timelineNameAliases[normalized] ?? normalized;
+};
+
+const timelineEventKey = (event: LiveMatchEvent) =>
+  [
+    event.elapsed ?? "",
+    event.extra ?? "",
+    event.type.toLowerCase(),
+    normalizeTimelineName(event.teamName),
+  ].join("|");
+
+const sortTimelineEvents = (events: LiveMatchEvent[]) =>
+  [...events].sort((left, right) => {
+    if ((left.elapsed ?? 999) !== (right.elapsed ?? 999)) return (left.elapsed ?? 999) - (right.elapsed ?? 999);
+    return (left.extra ?? 999) - (right.extra ?? 999);
+  });
+
+const mergeTimelineEvents = (detailEvents: LiveMatchEvent[], matchEvents: LiveMatchEvent[]) => {
+  const eventsByKey = new Map<string, LiveMatchEvent>();
+
+  [...detailEvents, ...matchEvents].forEach((event) => {
+    const key = timelineEventKey(event);
+    if (!eventsByKey.has(key)) eventsByKey.set(key, event);
+  });
+
+  return sortTimelineEvents([...eventsByKey.values()]);
+};
+
 function LineupExtras({
   away,
   events,
@@ -717,10 +790,13 @@ export function MatchCenter({
     };
   }, [match.id]);
 
-  const events = details?.events.length ? details.events : score?.events ?? [];
-  const goalEvents = events.filter(isGoal);
-  const homeEvents = goalEvents.filter((event) => eventSide(event, match.homeTeam, match.awayTeam) === "home");
-  const awayEvents = goalEvents.filter((event) => eventSide(event, match.homeTeam, match.awayTeam) === "away");
+  const matchEvents = score?.events ?? [];
+  const detailEvents = details?.events ?? [];
+  const timelineEvents = mergeTimelineEvents(detailEvents, matchEvents);
+  const matchEventSide = (event: LiveMatchEvent) => eventSide(event, match.homeTeam, match.awayTeam);
+  const goalEvents = matchEvents.filter(isGoal);
+  const homeEvents = goalEvents.filter((event) => matchEventSide(event) === "home");
+  const awayEvents = goalEvents.filter((event) => matchEventSide(event) === "away");
   const homeScore = score?.homeScore;
   const awayScore = score?.awayScore;
   const showScore = score ? isScoreVisible(score) : false;
@@ -803,12 +879,12 @@ export function MatchCenter({
       <div className="match-center-panel">
         {activeTab === "events" && (
           <div className="match-event-list">
-            {events.length ? (
-              events.map((event, index) => (
+            {timelineEvents.length ? (
+              timelineEvents.map((event, index) => (
                 <EventTimelineRow
                   event={event}
-                  key={`${event.elapsed}-${event.type}-${index}`}
-                  side={eventSide(event, match.homeTeam, match.awayTeam)}
+                  key={`${timelineEventKey(event)}-${index}`}
+                  side={matchEventSide(event)}
                 />
               ))
             ) : (
@@ -827,7 +903,7 @@ export function MatchCenter({
                 <div className="match-pitch-center" aria-hidden="true"><span /></div>
                 {details.lineups[1] && <PitchTeam lineup={details.lineups[1]} reversed />}
               </div>
-              <LineupExtras away={away} events={events} home={home} lineups={details.lineups} />
+              <LineupExtras away={away} events={timelineEvents} home={home} lineups={details.lineups} />
             </div>
           ) : (
             <MissingData title="Chưa có đội hình ra sân">
