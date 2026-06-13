@@ -134,8 +134,26 @@ export const formatKickoff = (kickoffAt: string, timezone = "Asia/Ho_Chi_Minh") 
     timeZone: timezone,
   }).format(new Date(kickoffAt));
 
-export const getTeam = (nameOrId: string) =>
-  teams.find((team) => team.name === nameOrId || team.id === nameOrId) ?? null;
+const TEAM_NAME_MAPPINGS: Record<string, string> = {
+  "bosnia and herzegovina": "Bosnia & Herzegovina",
+  "democratic republic of the congo": "DR Congo",
+  "united states": "USA",
+};
+
+export const getTeam = (nameOrId: string) => {
+  if (!nameOrId) return null;
+  const key = nameOrId.toLowerCase().trim();
+  const mappedName = TEAM_NAME_MAPPINGS[key] || nameOrId;
+  const target = mappedName.toLowerCase().trim();
+  return (
+    teams.find(
+      (team) =>
+        team.name.toLowerCase() === target ||
+        team.id.toLowerCase() === target ||
+        team.code.toLowerCase() === target
+    ) ?? null
+  );
+};
 
 export const getMatch = (id: string) =>
   matches.find((match) => match.id === id) ?? null;
@@ -146,8 +164,9 @@ export const getGroup = (id: string) =>
 export const getMatchesByTeam = (nameOrId: string) => {
   const team = getTeam(nameOrId);
   if (!team) return [];
+  const teamName = team.name;
   return matches.filter(
-    (match) => match.homeTeam === team.name || match.awayTeam === team.name,
+    (match) => match.homeTeam === teamName || match.awayTeam === teamName,
   );
 };
 

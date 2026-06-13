@@ -74,8 +74,8 @@ export default async function GroupsPage() {
                       {String(index + 1).padStart(2, "0")}
                     </span>
                     <Link className="standings-team" href={team ? `/doi-tuyen/${team.id}` : "/doi-tuyen"} role="cell">
-                      <TeamFlag countryCode={team?.countryCode ?? ""} label={row.name} />
-                      <strong>{row.name}</strong>
+                      <TeamFlag countryCode={team?.countryCode ?? ""} label={team?.name ?? row.name} />
+                      <strong>{team?.name ?? row.name}</strong>
                       <small>{row.code}</small>
                     </Link>
                     <span className="data" role="cell">{row.played}</span>

@@ -49,6 +49,11 @@ const eventLabel = (event: LiveMatchEvent) => {
 
 const isGoal = (event: LiveMatchEvent) => event.type.toLowerCase() === "goal";
 
+const formatMinute = (event: LiveMatchEvent) => {
+  if (event.elapsed === null) return "-";
+  return event.extra ? `${event.elapsed}+${event.extra}` : `${event.elapsed}`;
+};
+
 const statisticLabels: Record<string, string> = {
   "Shots on Goal": "Sút trúng đích",
   "Shots off Goal": "Sút không trúng đích",
@@ -353,7 +358,7 @@ function PlayerEventBadges({
     <span className="match-lineup-player-events">
       {relatedEvents.map((event, index) => {
         const detail = event.detail.toLowerCase();
-        const minute = event.elapsed !== null ? `${event.elapsed}'` : "";
+        const minute = event.elapsed !== null ? `${formatMinute(event)}'` : "";
         if (event.type.toLowerCase() === "subst") {
           const isIn = normalizePersonName(event.playerName) === normalizePersonName(playerName);
           return (
@@ -536,7 +541,7 @@ function EventTimelineRow({
     <div className={`match-event-row match-event-row-${side}`}>
       <div className="match-event-cell match-event-cell-home">{side === "home" ? content : null}</div>
       <div className="match-event-center">
-        <span className="match-event-minute data">{event.elapsed ?? "-"}&apos;</span>
+        <span className="match-event-minute data">{formatMinute(event)}&apos;</span>
         <EventGlyph event={event} />
       </div>
       <div className="match-event-cell match-event-cell-away">{side === "away" || side === "neutral" ? content : null}</div>
@@ -753,7 +758,7 @@ export function MatchCenter({
           <div>
             {homeEvents.map((event, index) => (
               <span key={`home-${event.elapsed}-${index}`}>
-                {event.playerName ?? event.teamName} {event.elapsed}&apos;
+                {event.playerName ?? event.teamName} {formatMinute(event)}&apos;
               </span>
             ))}
           </div>
@@ -761,7 +766,7 @@ export function MatchCenter({
           <div>
             {awayEvents.map((event, index) => (
               <span key={`away-${event.elapsed}-${index}`}>
-                {event.playerName ?? event.teamName} {event.elapsed}&apos;
+                {event.playerName ?? event.teamName} {formatMinute(event)}&apos;
               </span>
             ))}
           </div>
