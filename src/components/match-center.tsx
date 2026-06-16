@@ -137,6 +137,7 @@ const eventSide = (event: LiveMatchEvent, homeName: string, awayName: string) =>
     "republic of korea": "south korea",
     "united states": "usa",
     "united states of america": "usa",
+    turkiye: "turkey",
   };
   const normalize = (value: string | null | undefined) => {
     const normalized = (value ?? "")
@@ -827,7 +828,7 @@ export function MatchCenter({
   const detailEvents = details?.events ?? [];
   const timelineEvents = mergeTimelineEvents(detailEvents, matchEvents);
   const matchEventSide = (event: LiveMatchEvent) => eventSide(event, match.homeTeam, match.awayTeam);
-  const goalEvents = matchEvents.filter(isGoal);
+  const goalEvents = timelineEvents.filter(isGoal);
   const homeEvents = goalEvents.filter((event) => matchEventSide(event) === "home");
   const awayEvents = goalEvents.filter((event) => matchEventSide(event) === "away");
   const kickoffTime = new Date(match.kickoffAt).getTime();
