@@ -26,13 +26,14 @@ export async function GET(request: NextRequest) {
       },
     );
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return Response.json(
       {
         source: "fallback",
-        configured: true,
+        configured: false,
         updatedAt: new Date().toISOString(),
         matches: [],
-        error: error instanceof Error ? error.message : "Unknown worldcup26.ir error",
+        error: `Dữ liệu tỉ số thất bại: ${errorMessage}`,
       } satisfies LiveScoresResponse,
       { status: 200 },
     );

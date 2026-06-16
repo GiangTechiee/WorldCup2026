@@ -73,7 +73,7 @@ const config = {
   baseUrl: process.env.WORLDCUP26_BASE_URL ?? "https://worldcup26.ir",
 };
 
-const REQUEST_TIMEOUT_MS = 1_200;
+const REQUEST_TIMEOUT_MS = 5_000;
 const GAMES_CACHE_TTL = 15_000;
 let gamesCache: { expiresAt: number; value: WorldCup26Game[] } | null = null;
 
@@ -216,7 +216,13 @@ const getGames = async () => {
 
 const fetchWorldCup26 = async <T>(path: string) => {
   const url = new URL(path, config.baseUrl);
-  const response = await fetchWithTimeout(url);
+  let response: Response;
+
+  try {
+    response = await fetchWithTimeout(url);
+  } catch (error) {
+    throw new Error(`worldcup26.ir timeout or network error`);
+  }
 
   if (!response.ok) {
     throw new Error(`worldcup26.ir returned HTTP ${response.status}`);
