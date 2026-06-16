@@ -3,6 +3,7 @@ import { getApiFootballMatchDetails } from "@/lib/api-football";
 import { getEspnMatchDetails } from "@/lib/espn-football";
 import type { MatchDetailsResponse } from "@/lib/live-score";
 import { getMatch, type Match } from "@/lib/worldcup";
+import { getWorldCup26Events } from "@/lib/worldcup26-api";
 
 const DETAILS_CACHE_TTL = 60_000;
 const PREMATCH_DETAIL_WINDOW = 45 * 60_000;
@@ -81,6 +82,17 @@ export async function GET(request: NextRequest) {
           apiFootballError instanceof Error ? apiFootballError.message : "API-Football không khả dụng";
         details = emptyDetails(match, `${espnMessage} · ${apiFootballMessage}`);
       }
+    }
+
+    try {
+      const worldcupEvents = await getWorldCup26Events(match.id);
+      if (worldcupEvents.length > details.events.length) {
+        details.events = worldcupEvents;
+        details.source = "worldcup26";
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      console.error(`WorldCup26 events error for ${match.id}: ${msg}`);
     }
 
     return Response.json(rememberDetails(matchId, details), {

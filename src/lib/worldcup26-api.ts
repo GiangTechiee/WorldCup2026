@@ -198,6 +198,7 @@ const getGames = async () => {
     response = await fetchWithTimeout(url);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    console.error(`WorldCup26 fetch error: ${message}`);
     throw new Error(`Không thể tải dữ liệu từ worldcup26.ir: ${message}`);
   }
 
@@ -241,6 +242,18 @@ export const getWorldCup26LiveScore = async (matchId: string, includeEvents = fa
   const gameId = matchId.replace(/^match-/, "");
   const game = games.find((item) => item.id === gameId);
   return game ? toLiveMatchScore(game, includeEvents) : null;
+};
+
+export const getWorldCup26Events = async (matchId: string): Promise<LiveMatchEvent[]> => {
+  const games = await getGames();
+  const gameId = matchId.replace(/^match-/, "");
+  const game = games.find((item) => item.id === gameId);
+  if (!game) return [];
+
+  return [
+    ...parseScorers(game.home_scorers, game.home_team_name_en),
+    ...parseScorers(game.away_scorers, game.away_team_name_en),
+  ].sort((a, b) => (a.elapsed ?? 999) - (b.elapsed ?? 999));
 };
 
 const normalizeTeamName = (value: string) => {

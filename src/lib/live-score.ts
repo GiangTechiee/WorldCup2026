@@ -68,7 +68,7 @@ export type MatchStatistic = {
 };
 
 export type MatchDetailsResponse = {
-  source: "espn" | "api-football" | "unconfigured" | "fallback";
+  source: "espn" | "api-football" | "unconfigured" | "fallback" | "worldcup26";
   configured: boolean;
   fixtureId: number | null;
   updatedAt: string;
