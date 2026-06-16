@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { LiveMatchEvent, LiveMatchScore, LiveMatchStatus } from "@/lib/live-score";
+import rawMatches from "@/data/raw/worldcup.json" assert { type: "json" };
 
 type WorldCup26GamesResponse = {
   games: WorldCup26Game[];
@@ -73,8 +74,8 @@ const config = {
   baseUrl: process.env.WORLDCUP26_BASE_URL ?? "https://worldcup26.ir",
 };
 
-const REQUEST_TIMEOUT_MS = 5_000;
-const GAMES_CACHE_TTL = 15_000;
+const REQUEST_TIMEOUT_MS = 8_000;
+const GAMES_CACHE_TTL = 30_000;
 let gamesCache: { expiresAt: number; value: WorldCup26Game[] } | null = null;
 
 const fetchWithTimeout = (url: URL) => {
@@ -190,13 +191,12 @@ const getGames = async () => {
     response = await fetchWithTimeout(url);
   } catch (error) {
     if (gamesCache) return gamesCache.value;
-    const message = error instanceof Error ? error.message : "Unknown error";
-    throw new Error(`Không thể tải dữ liệu trận đấu: ${message}`);
+    return getFallbackGames();
   }
 
   if (!response.ok) {
     if (gamesCache) return gamesCache.value;
-    throw new Error(`worldcup26.ir returned HTTP ${response.status}`);
+    return getFallbackGames();
   }
 
   const payload = (await response.json()) as WorldCup26GamesResponse;
@@ -205,6 +205,21 @@ const getGames = async () => {
     value: payload.games,
   };
   return payload.games;
+};
+
+const getFallbackGames = (): WorldCup26Game[] => {
+  const matches = (rawMatches as { matches: Array<{ num: number; date: string; time: string; team1: string; team2: string; group: string; ground: string }> }).matches;
+  return matches.map((match) => ({
+    id: String(match.num),
+    home_score: null,
+    away_score: null,
+    home_scorers: null,
+    away_scorers: null,
+    finished: null,
+    time_elapsed: null,
+    home_team_name_en: match.team1,
+    away_team_name_en: match.team2,
+  }));
 };
 
 const fetchWorldCup26 = async <T>(path: string) => {
