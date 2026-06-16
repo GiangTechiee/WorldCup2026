@@ -1,7 +1,7 @@
-import groupsSource from "@/data/raw/worldcup.groups.json";
-import stadiumsSource from "@/data/raw/worldcup.stadiums.json";
-import teamsSource from "@/data/raw/worldcup.teams.json";
-import tournamentSource from "@/data/raw/worldcup.json";
+import groupsSource from "@/data/raw/worldcup.groups.json" with { type: "json" };
+import stadiumsSource from "@/data/raw/worldcup.stadiums.json" with { type: "json" };
+import teamsSource from "@/data/raw/worldcup.teams.json" with { type: "json" };
+import tournamentSource from "@/data/raw/worldcup.json" with { type: "json" };
 
 export type Team = {
   id: string;

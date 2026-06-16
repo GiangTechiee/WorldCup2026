@@ -1,7 +1,7 @@
-import groupsSource from "../src/data/raw/worldcup.groups.json";
-import stadiumsSource from "../src/data/raw/worldcup.stadiums.json";
-import teamsSource from "../src/data/raw/worldcup.teams.json";
-import tournamentSource from "../src/data/raw/worldcup.json";
+import groupsSource from "../src/data/raw/worldcup.groups.json" with { type: "json" };
+import stadiumsSource from "../src/data/raw/worldcup.stadiums.json" with { type: "json" };
+import teamsSource from "../src/data/raw/worldcup.teams.json" with { type: "json" };
+import tournamentSource from "../src/data/raw/worldcup.json" with { type: "json" };
 
 const fail = (message: string): never => {
   throw new Error(message);

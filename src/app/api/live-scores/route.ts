@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     try {
-      const espnMatches = await getLiveScoresFromEspn();
+      const espnMatches = await getLiveScoresFromEspn(matchId ?? undefined);
       return Response.json(
         {
           source: "espn",

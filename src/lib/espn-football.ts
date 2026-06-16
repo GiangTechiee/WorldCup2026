@@ -16,15 +16,28 @@ type EspnTeam = {
   displayName?: string;
 };
 
-type EspnScoreboardEvent = {
+export type EspnScoreboardEvent = {
   id?: string;
   competitions?: Array<{
     competitors?: Array<{
       homeAway?: "home" | "away";
       team?: EspnTeam;
-      score?: number;
+      score?: number | string | null;
       clock?: { displayValue?: string };
     }>;
+    status?: {
+      clock?: number;
+      displayClock?: string;
+      period?: number;
+      type?: {
+        id?: string;
+        name?: string;
+        state?: string;
+        completed?: boolean;
+        detail?: string;
+        shortDetail?: string;
+      };
+    };
   }>;
 };
 

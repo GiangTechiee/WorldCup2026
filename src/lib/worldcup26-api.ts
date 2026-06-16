@@ -1,8 +1,8 @@
 import "server-only";
 
 import type { LiveMatchEvent, LiveMatchScore, LiveMatchStatus } from "@/lib/live-score";
-import rawMatches from "@/data/raw/worldcup.json" assert { type: "json" };
-import { getEspnScoreboard, type EspnScoreboard } from "@/lib/espn-football";
+import { matches } from "@/lib/worldcup";
+import { getEspnScoreboard, type EspnScoreboardEvent } from "@/lib/espn-football";
 
 type WorldCup26GamesResponse = {
   games: WorldCup26Game[];
@@ -77,13 +77,19 @@ const config = {
 
 const REQUEST_TIMEOUT_MS = 8_000;
 const GAMES_CACHE_TTL = 30_000;
+const ESPN_SCOREBOARD_CACHE_TTL = 5 * 60 * 1000;
 let gamesCache: { expiresAt: number; value: WorldCup26Game[] } | null = null;
+let espnScoreboardCache: { expiresAt: number; value: EspnScoreboardEvent[] } | null = null;
 
 const fetchWithTimeout = (url: URL) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const request = fetch(url, {
     cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "WorldCup26/1.0",
+    },
     signal: controller.signal,
   }).finally(() => clearTimeout(timeout));
 
@@ -100,7 +106,7 @@ const statusFromWorldCup26 = (game: WorldCup26Game): LiveMatchStatus => {
   const elapsed = game.time_elapsed?.toLowerCase() ?? "";
   if (game.finished === "TRUE") return "finished";
   if (["ht", "half-time", "halftime", "half time", "break"].includes(elapsed)) return "halftime";
-  if (game.finished === "FALSE" && game.time_elapsed && elapsed !== "notstarted") {
+  if (game.finished === "FALSE" && game.time_elapsed && elapsed !== "notstarted" && elapsed !== "ns") {
     return "live";
   }
   return "scheduled";
@@ -191,13 +197,12 @@ const getGames = async () => {
   try {
     response = await fetchWithTimeout(url);
   } catch (error) {
-    if (gamesCache) return gamesCache.value;
-    return getFallbackGames();
+    const message = error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`Không thể tải dữ liệu từ worldcup26.ir: ${message}`);
   }
 
   if (!response.ok) {
-    if (gamesCache) return gamesCache.value;
-    return getFallbackGames();
+    throw new Error(`worldcup26.ir returned HTTP ${response.status}`);
   }
 
   const payload = (await response.json()) as WorldCup26GamesResponse;
@@ -206,38 +211,6 @@ const getGames = async () => {
     value: payload.games,
   };
   return payload.games;
-};
-
-const getFallbackGames = (): WorldCup26Game[] => {
-  const matches = (rawMatches as { matches: Array<{ num: number; date: string; time: string; team1: string; team2: string; group: string; ground: string }> }).matches;
-  const today = new Date().toISOString().slice(0, 10);
-  const todayMatches = matches.filter((m) => m.date === today);
-
-  if (todayMatches.length > 0) {
-    return todayMatches.map((match) => ({
-      id: String(match.num),
-      home_score: null,
-      away_score: null,
-      home_scorers: null,
-      away_scorers: null,
-      finished: "FALSE",
-      time_elapsed: "NS",
-      home_team_name_en: match.team1,
-      away_team_name_en: match.team2,
-    }));
-  }
-
-  return matches.map((match) => ({
-    id: String(match.num),
-    home_score: null,
-    away_score: null,
-    home_scorers: null,
-    away_scorers: null,
-    finished: null,
-    time_elapsed: null,
-    home_team_name_en: match.team1,
-    away_team_name_en: match.team2,
-  }));
 };
 
 const fetchWorldCup26 = async <T>(path: string) => {
@@ -270,43 +243,134 @@ export const getWorldCup26LiveScore = async (matchId: string, includeEvents = fa
   return game ? toLiveMatchScore(game, includeEvents) : null;
 };
 
-export const getLiveScoresFromEspn = async (): Promise<LiveMatchScore[]> => {
+const normalizeTeamName = (value: string) => {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+  const aliases: Record<string, string> = {
+    "czech republic": "czechia",
+    "korea republic": "south korea",
+    "republic of korea": "south korea",
+    "united states": "usa",
+    "united states of america": "usa",
+    turkiye: "turkey",
+    "bosnia herzegovina": "bosnia and herzegovina",
+  };
+
+  return aliases[normalized] ?? normalized;
+};
+
+const isSameTeam = (left: string, right: string) => {
+  const normalizedLeft = normalizeTeamName(left);
+  const normalizedRight = normalizeTeamName(right);
+  return normalizedLeft === normalizedRight || normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft);
+};
+
+const getEspnScoreboardDates = () => {
   const today = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  let scoreboard: EspnScoreboard;
-  try {
-    scoreboard = await getEspnScoreboard(today);
-  } catch {
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10).replaceAll("-", "");
-    scoreboard = await getEspnScoreboard(yesterday);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10).replaceAll("-", "");
+  const dates = [...new Set(matches.map((match) => match.date.replaceAll("-", "")))].filter((date) => date <= tomorrow);
+
+  return dates.length ? dates : [today, new Date(Date.now() - 86400000).toISOString().slice(0, 10).replaceAll("-", "")];
+};
+
+const getEspnScoreboardEvents = async () => {
+  if (espnScoreboardCache && espnScoreboardCache.expiresAt > Date.now()) return espnScoreboardCache.value;
+
+  const scoreboards = await Promise.all(
+    getEspnScoreboardDates().map((date) => getEspnScoreboard(date).catch(() => ({ events: [] }))),
+  );
+  const events = scoreboards.flatMap((scoreboard) => scoreboard.events ?? []);
+
+  if (!events.length) throw new Error("ESPN không có dữ liệu bảng tỉ số");
+
+  espnScoreboardCache = {
+    expiresAt: Date.now() + ESPN_SCOREBOARD_CACHE_TTL,
+    value: events,
+  };
+  return events;
+};
+
+const teamName = (event: EspnScoreboardEvent, side: "home" | "away") => {
+  const competition = event.competitions?.[0];
+  return competition?.competitors?.find((competitor) => competitor.homeAway === side)?.team?.displayName ?? "";
+};
+
+const findLocalMatch = (event: EspnScoreboardEvent) => {
+  const home = teamName(event, "home");
+  const away = teamName(event, "away");
+
+  return (
+    matches.find((match) => {
+      const direct = isSameTeam(home, match.homeTeam) && isSameTeam(away, match.awayTeam);
+      const reversed = isSameTeam(home, match.awayTeam) && isSameTeam(away, match.homeTeam);
+      return direct || reversed;
+    }) ?? null
+  );
+};
+
+const parseEspnElapsed = (value: string | null | undefined, clockSeconds?: number | null) => {
+  if (clockSeconds !== null && clockSeconds !== undefined && clockSeconds > 0) {
+    return Math.floor(clockSeconds / 60);
+  }
+  if (!value) return null;
+  const match = value.match(/\d+/);
+  return match ? Number(match[0]) : null;
+};
+
+const statusFromEspn = (event: EspnScoreboardEvent): LiveMatchStatus => {
+  const status = event.competitions?.[0]?.status;
+  const statusName = status?.type?.name?.toLowerCase() ?? "";
+  const statusDetail = (status?.type?.detail ?? status?.type?.shortDetail ?? status?.displayClock ?? "").toLowerCase();
+  const completed = Boolean(status?.type?.completed);
+  const elapsed = parseEspnElapsed(status?.displayClock, status?.clock);
+
+  if (completed || statusName.includes("full_time") || statusName.includes("final") || statusDetail === "ft") return "finished";
+  if (statusName.includes("half_time") || statusDetail === "ht") return "halftime";
+  if (statusName.includes("in_progress") || status?.type?.state === "in" || (elapsed !== null && elapsed > 0)) return "live";
+  return "scheduled";
+};
+
+export const getLiveScoresFromEspn = async (matchId?: string): Promise<LiveMatchScore[]> => {
+  const events = await getEspnScoreboardEvents();
+  const scores: LiveMatchScore[] = [];
+
+  for (const event of events) {
+    const localMatch = findLocalMatch(event);
+    if (!localMatch || (matchId && localMatch.id !== matchId)) continue;
+
+    const competition = event.competitions?.[0];
+    const home = competition?.competitors?.find((c) => c.homeAway === "home");
+    const away = competition?.competitors?.find((c) => c.homeAway === "away");
+    const homeScore = parseNullableNumber(home?.score ?? null);
+    const awayScore = parseNullableNumber(away?.score ?? null);
+    const elapsed = parseEspnElapsed(competition?.status?.displayClock ?? home?.clock?.displayValue ?? away?.clock?.displayValue, competition?.status?.clock);
+    const status = statusFromEspn(event);
+
+    scores.push({
+      matchId: localMatch.id,
+      apiFixtureId: Number(event.id),
+      status,
+      statusShort: status === "live" ? "LIVE" : status === "finished" ? "FT" : status === "halftime" ? "HT" : "NS",
+      statusLong: status === "live" ? "Live" : status === "finished" ? "Match Finished" : status === "halftime" ? "Half Time" : "Not Started",
+      elapsed,
+      homeScore,
+      awayScore,
+      halftimeHome: null,
+      halftimeAway: null,
+      fulltimeHome: status === "finished" ? homeScore : null,
+      fulltimeAway: status === "finished" ? awayScore : null,
+      updatedAt: new Date().toISOString(),
+      events: [],
+    });
   }
 
-  return (scoreboard.events ?? [])
-    .map((event) => {
-      const home = event.competitions?.[0]?.competitors?.find((c) => c.homeAway === "home");
-      const away = event.competitions?.[0]?.competitors?.find((c) => c.homeAway === "away");
-      const homeScore = home?.score ?? null;
-      const awayScore = away?.score ?? null;
-      const elapsed = home?.clock?.displayValue ?? away?.clock?.displayValue;
-      const status: LiveMatchStatus = elapsed ? "live" : "scheduled";
-
-      return {
-        matchId: `match-${event.id}`,
-        apiFixtureId: Number(event.id),
-        status,
-        statusShort: status === "live" ? "LIVE" : "NS",
-        statusLong: status === "live" ? "Live" : "Not Started",
-        elapsed: elapsed ? Number(elapsed.match(/\d+/)?.[0] ?? null) : null,
-        homeScore: homeScore !== null ? Number(homeScore) : null,
-        awayScore: awayScore !== null ? Number(awayScore) : null,
-        halftimeHome: null,
-        halftimeAway: null,
-        fulltimeHome: null,
-        fulltimeAway: null,
-        updatedAt: new Date().toISOString(),
-        events: [],
-      };
-    })
-    .filter((score) => score.homeScore !== null || score.awayScore !== null || score.status === "live");
+  return scores;
 };
 
 export const getWorldCup26Standings = async (): Promise<WorldCup26Standing[]> => {
