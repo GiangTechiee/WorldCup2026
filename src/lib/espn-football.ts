@@ -22,11 +22,13 @@ type EspnScoreboardEvent = {
     competitors?: Array<{
       homeAway?: "home" | "away";
       team?: EspnTeam;
+      score?: number;
+      clock?: { displayValue?: string };
     }>;
   }>;
 };
 
-type EspnScoreboard = {
+export type EspnScoreboard = {
   events?: EspnScoreboardEvent[];
 };
 

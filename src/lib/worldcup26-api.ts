@@ -270,7 +270,7 @@ export const getLiveScoresFromEspn = async (): Promise<LiveMatchScore[]> => {
       const homeScore = home?.score ?? null;
       const awayScore = away?.score ?? null;
       const elapsed = home?.clock?.displayValue ?? away?.clock?.displayValue;
-      const status = elapsed ? "live" : "scheduled";
+      const status: LiveMatchStatus = elapsed ? "live" : "scheduled";
 
       return {
         matchId: `match-${event.id}`,

@@ -36,7 +36,7 @@ export type LiveMatchScore = {
 };
 
 export type LiveScoresResponse = {
-  source: "worldcup26" | "fallback";
+  source: "worldcup26" | "espn" | "fallback";
   configured: boolean;
   updatedAt: string;
   matches: LiveMatchScore[];
