@@ -1,0 +1,6 @@
+{
+  "json.schemaDownload.trustedDomains": {
+    "https://app.kilo.ai/": true,
+    "https://models.dev/": true
+  }
+}
