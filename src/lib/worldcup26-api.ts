@@ -210,6 +210,23 @@ const getGames = async () => {
 
 const getFallbackGames = (): WorldCup26Game[] => {
   const matches = (rawMatches as { matches: Array<{ num: number; date: string; time: string; team1: string; team2: string; group: string; ground: string }> }).matches;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayMatches = matches.filter((m) => m.date === today);
+
+  if (todayMatches.length > 0) {
+    return todayMatches.map((match) => ({
+      id: String(match.num),
+      home_score: null,
+      away_score: null,
+      home_scorers: null,
+      away_scorers: null,
+      finished: "FALSE",
+      time_elapsed: "NS",
+      home_team_name_en: match.team1,
+      away_team_name_en: match.team2,
+    }));
+  }
+
   return matches.map((match) => ({
     id: String(match.num),
     home_score: null,
