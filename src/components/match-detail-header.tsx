@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { FavoriteButton } from "@/components/favorite-button";
 import { TeamFlag } from "@/components/team-flag";
-import type { LiveMatchScore, LiveScoresResponse } from "@/lib/live-score";
+import type { LiveMatchScore, LiveMatchStatus, LiveScoresResponse } from "@/lib/live-score";
 import { isScoreVisible } from "@/lib/live-score";
 import { formatKickoff, type Match } from "@/lib/worldcup";
 
@@ -14,14 +14,33 @@ type TeamSummary = {
   name: string;
 };
 
-const statusLabel = (score: LiveMatchScore | null) => {
-  if (!score) return "Chưa đá";
-  if (score.status === "finished") return "Đã kết thúc";
-  if (score.status === "live") return score.elapsed !== null ? `Đang đá · ${score.elapsed}'` : "Đang đá";
-  if (score.status === "halftime") return "Nghỉ giữa hiệp";
-  if (score.status === "postponed") return "Đã hoãn";
-  if (score.status === "cancelled") return "Đã hủy";
-  return score.statusLong || "Chưa đá";
+const LIVE_WINDOW_MS = 2.75 * 60 * 60 * 1000;
+
+const useClock = () => {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  return now;
+};
+
+const statusLabel = (
+  score: LiveMatchScore | null,
+  displayStatus: LiveMatchStatus | "scheduled",
+  elapsedByClock: number | null,
+) => {
+  if (displayStatus === "finished") return "Đã kết thúc";
+  if (displayStatus === "live") {
+    const elapsed = score?.elapsed ?? elapsedByClock;
+    return elapsed !== null ? `Đang đá · ${elapsed}'` : "Đang đá";
+  }
+  if (displayStatus === "halftime") return "Nghỉ giữa hiệp";
+  if (displayStatus === "postponed") return "Đã hoãn";
+  if (displayStatus === "cancelled") return "Đã hủy";
+  return score?.statusLong || "Chưa đá";
 };
 
 function TeamBlock({ side, team }: { side: "home" | "away"; team: TeamSummary }) {
@@ -49,6 +68,7 @@ export function MatchDetailHeader({
   match: Match;
 }) {
   const [score, setScore] = useState<LiveMatchScore | null>(null);
+  const now = useClock();
 
   useEffect(() => {
     let isMounted = true;
@@ -76,7 +96,21 @@ export function MatchDetailHeader({
     };
   }, [match.id]);
 
-  const showScore = score ? isScoreVisible(score) : false;
+  const kickoffTime = new Date(match.kickoffAt).getTime();
+  const shouldBeLiveByClock =
+    Number.isFinite(kickoffTime) &&
+    now >= kickoffTime &&
+    now < kickoffTime + LIVE_WINDOW_MS &&
+    score?.status !== "finished" &&
+    score?.status !== "postponed" &&
+    score?.status !== "cancelled";
+  const displayStatus = shouldBeLiveByClock ? "live" : score?.status ?? "scheduled";
+  const elapsedByClock = shouldBeLiveByClock ? Math.max(0, Math.floor((now - kickoffTime) / 60_000) + 1) : null;
+  const showScore = score
+    ? isScoreVisible(score) || (displayStatus === "live" && score.homeScore !== null && score.awayScore !== null)
+    : displayStatus === "live";
+  const homeScore = showScore ? score?.homeScore ?? 0 : null;
+  const awayScore = showScore ? score?.awayScore ?? 0 : null;
 
   return (
     <section className="match-summary-card">
@@ -86,7 +120,9 @@ export function MatchDetailHeader({
       </div>
 
       <div className="match-summary-status">
-        <span className={score?.status === "live" ? "match-summary-live" : ""}>{statusLabel(score)}</span>
+        <span className={displayStatus === "live" ? "match-summary-live" : ""}>
+          {statusLabel(score, displayStatus, elapsedByClock)}
+        </span>
         <small className="data">{formatKickoff(match.kickoffAt)}</small>
       </div>
 
@@ -94,11 +130,11 @@ export function MatchDetailHeader({
         <TeamBlock side="home" team={home} />
 
         <div className="match-summary-center">
-          {showScore && score ? (
-            <div className="match-summary-score data" aria-label={`Tỉ số ${score.homeScore} - ${score.awayScore}`}>
-              <strong>{score.homeScore}</strong>
+          {showScore ? (
+            <div className="match-summary-score data" aria-label={`Tỉ số ${homeScore} - ${awayScore}`}>
+              <strong>{homeScore}</strong>
               <span>-</span>
-              <strong>{score.awayScore}</strong>
+              <strong>{awayScore}</strong>
             </div>
           ) : (
             <div className="match-summary-score-empty" aria-label="Chưa có tỷ số" />

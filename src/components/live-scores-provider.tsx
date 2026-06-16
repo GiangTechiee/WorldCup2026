@@ -23,7 +23,7 @@ const LiveScoresContext = createContext<LiveScoresContextValue | null>(null);
 
 export function LiveScoresProvider({
   children,
-  refreshMs = 45_000,
+  refreshMs = 15_000,
 }: {
   children: ReactNode;
   refreshMs?: number;

@@ -103,7 +103,7 @@ const fetchApiFootball = async (path: string, revalidate: number) => {
     next: {
       revalidate,
     },
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(4_000),
   });
 
   if (!response.ok) throw new Error(`API-Football returned HTTP ${response.status}`);

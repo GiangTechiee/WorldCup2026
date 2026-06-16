@@ -8,6 +8,7 @@ import { TeamFlag } from "@/components/team-flag";
 import type {
   LiveMatchEvent,
   LiveMatchScore,
+  LiveMatchStatus,
   LiveScoresResponse,
   MatchDetailsResponse,
   MatchLineup,
@@ -24,6 +25,19 @@ type TeamSummary = {
 
 type MatchCenterTab = "events" | "lineups" | "stats";
 
+const LIVE_WINDOW_MS = 2.75 * 60 * 60 * 1000;
+
+const useClock = () => {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  return now;
+};
+
 const tabFromLocation = (): MatchCenterTab => {
   const tab = new URLSearchParams(window.location.search).get("tab");
   return tab === "lineups" || tab === "stats" ? tab : "events";
@@ -37,6 +51,22 @@ const statusLabel = (score: LiveMatchScore | null) => {
   if (score.status === "postponed") return "Hoãn";
   if (score.status === "cancelled") return "Hủy";
   return score.statusLong || "Chưa đá";
+};
+
+const displayStatusLabel = (
+  score: LiveMatchScore | null,
+  displayStatus: LiveMatchStatus | "scheduled",
+  elapsedByClock: number | null,
+) => {
+  if (displayStatus === "live") {
+    const elapsed = score?.elapsed ?? elapsedByClock;
+    return elapsed !== null ? `Đang đá · ${elapsed}'` : "Đang đá";
+  }
+  if (displayStatus === "finished") return "Kết thúc";
+  if (displayStatus === "halftime") return "Nghỉ giữa hiệp";
+  if (displayStatus === "postponed") return "Hoãn";
+  if (displayStatus === "cancelled") return "Hủy";
+  return statusLabel(score);
 };
 
 const eventLabel = (event: LiveMatchEvent) => {
@@ -727,6 +757,7 @@ export function MatchCenter({
   const [details, setDetails] = useState<MatchDetailsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [detailsError, setDetailsError] = useState<string | null>(null);
+  const now = useClock();
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setActiveTab(tabFromLocation()), 0);
@@ -765,6 +796,7 @@ export function MatchCenter({
 
   useEffect(() => {
     let isMounted = true;
+    let initialDelayId: ReturnType<typeof setTimeout> | null = null;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const loadDetails = async () => {
@@ -778,17 +810,18 @@ export function MatchCenter({
         if (!isMounted) return;
         setDetailsError(fetchError instanceof Error ? fetchError.message : "Không tải được chi tiết trận đấu");
       } finally {
-        if (isMounted) timeoutId = setTimeout(loadDetails, 60_000);
+        if (isMounted) timeoutId = setTimeout(loadDetails, activeTab === "events" ? 120_000 : 60_000);
       }
     };
 
-    void loadDetails();
+    initialDelayId = setTimeout(loadDetails, activeTab === "events" ? 1_200 : 0);
 
     return () => {
       isMounted = false;
+      if (initialDelayId) clearTimeout(initialDelayId);
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [match.id]);
+  }, [activeTab, match.id]);
 
   const matchEvents = score?.events ?? [];
   const detailEvents = details?.events ?? [];
@@ -797,16 +830,26 @@ export function MatchCenter({
   const goalEvents = matchEvents.filter(isGoal);
   const homeEvents = goalEvents.filter((event) => matchEventSide(event) === "home");
   const awayEvents = goalEvents.filter((event) => matchEventSide(event) === "away");
-  const homeScore = score?.homeScore;
-  const awayScore = score?.awayScore;
-  const showScore = score ? isScoreVisible(score) : false;
+  const kickoffTime = new Date(match.kickoffAt).getTime();
+  const shouldBeLiveByClock =
+    Number.isFinite(kickoffTime) &&
+    now >= kickoffTime &&
+    now < kickoffTime + LIVE_WINDOW_MS &&
+    score?.status !== "finished" &&
+    score?.status !== "postponed" &&
+    score?.status !== "cancelled";
+  const displayStatus = shouldBeLiveByClock ? "live" : score?.status ?? "scheduled";
+  const elapsedByClock = shouldBeLiveByClock ? Math.max(0, Math.floor((now - kickoffTime) / 60_000) + 1) : null;
+  const showScore = score ? isScoreVisible(score) || (displayStatus === "live" && score.homeScore !== null && score.awayScore !== null) : displayStatus === "live";
+  const homeScore = showScore ? score?.homeScore ?? 0 : null;
+  const awayScore = showScore ? score?.awayScore ?? 0 : null;
 
   return (
     <section className="match-center-shell">
       <div className="match-center-card">
         <div className="match-center-topline">
           <span>World Cup 2026 · {formatKickoff(match.kickoffAt)}</span>
-          <strong>{statusLabel(score)}</strong>
+          <strong>{displayStatusLabel(score, displayStatus, elapsedByClock)}</strong>
         </div>
 
         <div className="match-center-scoreboard">

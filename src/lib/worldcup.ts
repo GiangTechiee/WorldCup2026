@@ -134,6 +134,20 @@ export const formatKickoff = (kickoffAt: string, timezone = "Asia/Ho_Chi_Minh") 
     timeZone: timezone,
   }).format(new Date(kickoffAt));
 
+export const DEFAULT_DISPLAY_TIMEZONE = "Asia/Ho_Chi_Minh";
+
+export const getDateKeyInTimezone = (date: Date, timezone = DEFAULT_DISPLAY_TIMEZONE) => {
+  const parts = new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: timezone,
+    year: "numeric",
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
+
 const TEAM_NAME_MAPPINGS: Record<string, string> = {
   "bosnia and herzegovina": "Bosnia & Herzegovina",
   "democratic republic of the congo": "DR Congo",
@@ -173,8 +187,33 @@ export const getMatchesByTeam = (nameOrId: string) => {
 export const getMatchesByDate = (date: string) =>
   matches.filter((match) => match.date === date);
 
+export const getMatchesByDisplayDate = (date: string, timezone = DEFAULT_DISPLAY_TIMEZONE) =>
+  matches.filter((match) => getDateKeyInTimezone(new Date(match.kickoffAt), timezone) === date);
+
 export const getNextMatch = (now = new Date()) =>
   matches.find((match) => new Date(match.kickoffAt) >= now) ?? matches.at(-1) ?? null;
+
+export const getCurrentDisplayDayMatches = (now = new Date(), timezone = DEFAULT_DISPLAY_TIMEZONE) => {
+  const today = getDateKeyInTimezone(now, timezone);
+  const todayMatches = getMatchesByDisplayDate(today, timezone);
+  if (todayMatches.length) return { date: today, matches: todayMatches };
+
+  const nextMatch = getNextMatch(now);
+  if (!nextMatch) return { date: today, matches: [] };
+
+  const nextDate = getDateKeyInTimezone(new Date(nextMatch.kickoffAt), timezone);
+  return { date: nextDate, matches: getMatchesByDisplayDate(nextDate, timezone) };
+};
+
+export const getNextDisplayDayMatches = (now = new Date(), timezone = DEFAULT_DISPLAY_TIMEZONE) => {
+  const currentDate = getCurrentDisplayDayMatches(now, timezone).date;
+  const nextDate =
+    [...new Set(matches.map((match) => getDateKeyInTimezone(new Date(match.kickoffAt), timezone)))]
+      .sort()
+      .find((date) => date > currentDate) ?? null;
+
+  return nextDate ? { date: nextDate, matches: getMatchesByDisplayDate(nextDate, timezone) } : { date: currentDate, matches: [] };
+};
 
 export const tournamentStats = {
   matches: matches.length,

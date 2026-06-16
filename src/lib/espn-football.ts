@@ -7,7 +7,6 @@ import type {
   MatchLineupPlayer,
   MatchStatistic,
 } from "@/lib/live-score";
-import { resolvePlayerImage } from "@/lib/player-images";
 import type { Match } from "@/lib/worldcup";
 
 const ESPN_BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world";
@@ -118,7 +117,7 @@ const fetchEspn = async <T>(path: string, revalidate: number): Promise<T> => {
     next: {
       revalidate,
     },
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(4_000),
   });
 
   if (!response.ok) throw new Error(`ESPN returned HTTP ${response.status}`);
@@ -181,56 +180,29 @@ const toEvents = (summary: EspnSummary): LiveMatchEvent[] =>
     })
     .sort((left, right) => (left.elapsed ?? 999) - (right.elapsed ?? 999));
 
-const toPlayer = async (
-  entry: EspnRosterEntry,
-  teamName: string,
-  allowPlayerSearch: boolean,
-): Promise<MatchLineupPlayer> => {
-  const name = entry.athlete?.displayName ?? "Chưa xác định";
-  const espnHeadshotUrl = entry.athlete?.headshot?.href ?? null;
-  const espnJerseyUrl = entry.athlete?.jerseyImages?.[0]?.href ?? null;
+const toPlayer = (entry: EspnRosterEntry): MatchLineupPlayer => ({
+  id: entry.athlete?.id ? Number(entry.athlete.id) : null,
+  imageUrl: entry.athlete?.headshot?.href ?? null,
+  jerseyUrl: entry.athlete?.jerseyImages?.[0]?.href ?? null,
+  name: entry.athlete?.displayName ?? "Chưa xác định",
+  number: entry.jersey ? Number(entry.jersey) : null,
+  position: entry.position?.abbreviation ?? null,
+  grid: entry.formationPlace ?? null,
+});
 
-  return {
-    id: entry.athlete?.id ? Number(entry.athlete.id) : null,
-    imageUrl: await resolvePlayerImage({
-      allowPlayerSearch,
-      espnHeadshotUrl,
-      name,
-      teamName,
-    }),
-    jerseyUrl: espnJerseyUrl,
-    name,
-    number: entry.jersey ? Number(entry.jersey) : null,
-    position: entry.position?.abbreviation ?? null,
-    grid: entry.formationPlace ?? null,
-  };
-};
+const toLineups = (summary: EspnSummary): MatchLineup[] =>
+  (summary.rosters ?? []).map((roster) => {
+    const starters = (roster.roster ?? []).filter((entry) => entry.starter);
+    const substitutes = (roster.roster ?? []).filter((entry) => !entry.starter);
 
-const mapSeries = async <T, U>(items: T[], mapper: (item: T) => Promise<U>) => {
-  const results: U[] = [];
-  for (const item of items) {
-    results.push(await mapper(item));
-  }
-  return results;
-};
-
-const toLineups = async (summary: EspnSummary): Promise<MatchLineup[]> => {
-  return Promise.all(
-    (summary.rosters ?? []).map(async (roster) => {
-      const team = roster.team?.displayName ?? "Đội tuyển";
-      const starters = (roster.roster ?? []).filter((entry) => entry.starter);
-      const substitutes = (roster.roster ?? []).filter((entry) => !entry.starter);
-
-      return {
-        teamName: team,
-        formation: roster.formation ?? null,
-        coachName: null,
-        starters: await mapSeries(starters, (entry) => toPlayer(entry, team, true)),
-        substitutes: await Promise.all(substitutes.map((entry) => toPlayer(entry, team, false))),
-      };
-    }),
-  );
-};
+    return {
+      teamName: roster.team?.displayName ?? "Đội tuyển",
+      formation: roster.formation ?? null,
+      coachName: null,
+      starters: starters.map(toPlayer),
+      substitutes: substitutes.map(toPlayer),
+    };
+  });
 
 const statisticNames: Record<string, string> = {
   totalShots: "Total Shots",
@@ -282,7 +254,7 @@ export const getEspnMatchDetails = async (match: Match): Promise<MatchDetailsRes
     fixtureId: Number(eventId),
     updatedAt: new Date().toISOString(),
     events: toEvents(summary),
-    lineups: await toLineups(summary),
+    lineups: toLineups(summary),
     statistics: toStatistics(summary),
   };
 };

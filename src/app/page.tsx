@@ -1,13 +1,18 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
+import { HeroMatchCarousel } from "@/components/hero-match-carousel";
 import { LiveScoresNotice } from "@/components/live-scores-notice";
 import { LiveScoresProvider } from "@/components/live-scores-provider";
 import { MatchCard } from "@/components/match-card";
-import { getMatchesByDate, getNextMatch, tournamentStats } from "@/lib/worldcup";
+import { getCurrentDisplayDayMatches, getNextDisplayDayMatches, tournamentStats } from "@/lib/worldcup";
 
-export default function Home() {
-  const nextMatch = getNextMatch();
-  const dayMatches = nextMatch ? getMatchesByDate(nextMatch.date) : [];
+export default async function Home() {
+  await connection();
+
+  const currentDay = getCurrentDisplayDayMatches();
+  const tomorrowDay = getNextDisplayDayMatches();
+  const dayMatches = currentDay.matches;
 
   return (
     <LiveScoresProvider>
@@ -27,7 +32,7 @@ export default function Home() {
           </div>
           <div>
             <span className="poster-number" aria-hidden="true">26</span>
-            {nextMatch && <MatchCard match={nextMatch} featured />}
+            <HeroMatchCarousel date={tomorrowDay.date} matches={tomorrowDay.matches} />
           </div>
         </div>
       </section>
@@ -39,7 +44,7 @@ export default function Home() {
               <span className="eyebrow">Ngày mở màn</span>
               <h2 className="display">Cùng ngày, cùng nóng.</h2>
             </div>
-            <Link className="text-link" href={`/lich-dau?date=${nextMatch?.date ?? ""}`}>Xem ngày này →</Link>
+            <Link className="text-link" href={`/lich-dau?date=${currentDay.date}`}>Xem ngày này →</Link>
           </div>
           <div className="match-list">{dayMatches.map((match) => <MatchCard match={match} key={match.id} />)}</div>
         </div>

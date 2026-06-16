@@ -73,6 +73,29 @@ const config = {
   baseUrl: process.env.WORLDCUP26_BASE_URL ?? "https://worldcup26.ir",
 };
 
+const REQUEST_TIMEOUT_MS = 1_200;
+const GAMES_CACHE_TTL = 15_000;
+let gamesCache: { expiresAt: number; value: WorldCup26Game[] } | null = null;
+
+const fetchWithTimeout = (url: URL) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const request = fetch(url, {
+    cache: "no-store",
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout));
+
+  return Promise.race([
+    request,
+    new Promise<Response>((_, reject) => {
+      setTimeout(() => {
+        controller.abort();
+        reject(new Error(`worldcup26.ir timed out after ${REQUEST_TIMEOUT_MS}ms`));
+      }, REQUEST_TIMEOUT_MS);
+    }),
+  ]);
+};
+
 const parseNullableNumber = (value: string | number | null | undefined) => {
   if (value === null || value === undefined || value === "" || value === "null") return null;
   const parsed = Number(value);
@@ -166,28 +189,34 @@ const toLiveMatchScore = (game: WorldCup26Game, includeEvents: boolean): LiveMat
 };
 
 const getGames = async () => {
+  if (gamesCache && gamesCache.expiresAt > Date.now()) return gamesCache.value;
+
   const url = new URL("/get/games", config.baseUrl);
-  const response = await fetch(url, {
-    next: {
-      revalidate: 30,
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetchWithTimeout(url);
+  } catch (error) {
+    if (gamesCache) return gamesCache.value;
+    throw error;
+  }
 
   if (!response.ok) {
+    if (gamesCache) return gamesCache.value;
     throw new Error(`worldcup26.ir returned HTTP ${response.status}`);
   }
 
   const payload = (await response.json()) as WorldCup26GamesResponse;
+  gamesCache = {
+    expiresAt: Date.now() + GAMES_CACHE_TTL,
+    value: payload.games,
+  };
   return payload.games;
 };
 
-const fetchWorldCup26 = async <T>(path: string, revalidateSeconds: number) => {
+const fetchWorldCup26 = async <T>(path: string) => {
   const url = new URL(path, config.baseUrl);
-  const response = await fetch(url, {
-    next: {
-      revalidate: revalidateSeconds,
-    },
-  });
+  const response = await fetchWithTimeout(url);
 
   if (!response.ok) {
     throw new Error(`worldcup26.ir returned HTTP ${response.status}`);
@@ -210,8 +239,8 @@ export const getWorldCup26LiveScore = async (matchId: string, includeEvents = fa
 
 export const getWorldCup26Standings = async (): Promise<WorldCup26Standing[]> => {
   const [groupsPayload, teamsPayload] = await Promise.all([
-    fetchWorldCup26<WorldCup26GroupsResponse>("/get/groups", 60),
-    fetchWorldCup26<WorldCup26TeamsResponse>("/get/teams", 3600),
+    fetchWorldCup26<WorldCup26GroupsResponse>("/get/groups"),
+    fetchWorldCup26<WorldCup26TeamsResponse>("/get/teams"),
   ]);
   const teamsById = new Map(teamsPayload.teams.map((team) => [team.id, team]));
 
