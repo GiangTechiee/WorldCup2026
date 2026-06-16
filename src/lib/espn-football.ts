@@ -258,3 +258,7 @@ export const getEspnMatchDetails = async (match: Match): Promise<MatchDetailsRes
     statistics: toStatistics(summary),
   };
 };
+
+export const getEspnScoreboard = async (date: string): Promise<EspnScoreboard> => {
+  return fetchEspn<EspnScoreboard>(`/scoreboard?dates=${date}`, 300);
+};

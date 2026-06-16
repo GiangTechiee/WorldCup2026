@@ -2,6 +2,7 @@ import "server-only";
 
 import type { LiveMatchEvent, LiveMatchScore, LiveMatchStatus } from "@/lib/live-score";
 import rawMatches from "@/data/raw/worldcup.json" assert { type: "json" };
+import { getEspnScoreboard, type EspnScoreboard } from "@/lib/espn-football";
 
 type WorldCup26GamesResponse = {
   games: WorldCup26Game[];
@@ -250,6 +251,45 @@ export const getWorldCup26LiveScore = async (matchId: string, includeEvents = fa
   const gameId = matchId.replace(/^match-/, "");
   const game = games.find((item) => item.id === gameId);
   return game ? toLiveMatchScore(game, includeEvents) : null;
+};
+
+export const getLiveScoresFromEspn = async (): Promise<LiveMatchScore[]> => {
+  const today = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  let scoreboard: EspnScoreboard;
+  try {
+    scoreboard = await getEspnScoreboard(today);
+  } catch {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10).replaceAll("-", "");
+    scoreboard = await getEspnScoreboard(yesterday);
+  }
+
+  return (scoreboard.events ?? [])
+    .map((event) => {
+      const home = event.competitions?.[0]?.competitors?.find((c) => c.homeAway === "home");
+      const away = event.competitions?.[0]?.competitors?.find((c) => c.homeAway === "away");
+      const homeScore = home?.score ?? null;
+      const awayScore = away?.score ?? null;
+      const elapsed = home?.clock?.displayValue ?? away?.clock?.displayValue;
+      const status = elapsed ? "live" : "scheduled";
+
+      return {
+        matchId: `match-${event.id}`,
+        apiFixtureId: Number(event.id),
+        status,
+        statusShort: status === "live" ? "LIVE" : "NS",
+        statusLong: status === "live" ? "Live" : "Not Started",
+        elapsed: elapsed ? Number(elapsed.match(/\d+/)?.[0] ?? null) : null,
+        homeScore: homeScore !== null ? Number(homeScore) : null,
+        awayScore: awayScore !== null ? Number(awayScore) : null,
+        halftimeHome: null,
+        halftimeAway: null,
+        fulltimeHome: null,
+        fulltimeAway: null,
+        updatedAt: new Date().toISOString(),
+        events: [],
+      };
+    })
+    .filter((score) => score.homeScore !== null || score.awayScore !== null || score.status === "live");
 };
 
 export const getWorldCup26Standings = async (): Promise<WorldCup26Standing[]> => {

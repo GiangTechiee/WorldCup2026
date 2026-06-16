@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import type { LiveScoresResponse } from "@/lib/live-score";
-import { getWorldCup26LiveScore, getWorldCup26LiveScores } from "@/lib/worldcup26-api";
+import { getWorldCup26LiveScore, getWorldCup26LiveScores, getLiveScoresFromEspn } from "@/lib/worldcup26-api";
 
 export async function GET(request: NextRequest) {
   const matchId = request.nextUrl.searchParams.get("matchId");
@@ -27,15 +27,34 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return Response.json(
-      {
-        source: "fallback",
-        configured: false,
-        updatedAt: new Date().toISOString(),
-        matches: [],
-        error: `Dữ liệu tỉ số thất bại: ${errorMessage}`,
-      } satisfies LiveScoresResponse,
-      { status: 200 },
-    );
+    try {
+      const espnMatches = await getLiveScoresFromEspn();
+      return Response.json(
+        {
+          source: "espn",
+          configured: true,
+          updatedAt: new Date().toISOString(),
+          matches: espnMatches,
+        } satisfies LiveScoresResponse,
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "public, max-age=30, stale-while-revalidate=60",
+          },
+        },
+      );
+    } catch (espnError) {
+      const espnMessage = espnError instanceof Error ? espnError.message : "ESPN không khả dụng";
+      return Response.json(
+        {
+          source: "fallback",
+          configured: false,
+          updatedAt: new Date().toISOString(),
+          matches: [],
+          error: `Dữ liệu tỉ số thất bại: ${errorMessage} | ${espnMessage}`,
+        } satisfies LiveScoresResponse,
+        { status: 200 },
+      );
+    }
   }
 }
