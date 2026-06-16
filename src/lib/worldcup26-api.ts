@@ -85,15 +85,7 @@ const fetchWithTimeout = (url: URL) => {
     signal: controller.signal,
   }).finally(() => clearTimeout(timeout));
 
-  return Promise.race([
-    request,
-    new Promise<Response>((_, reject) => {
-      setTimeout(() => {
-        controller.abort();
-        reject(new Error(`worldcup26.ir timed out after ${REQUEST_TIMEOUT_MS}ms`));
-      }, REQUEST_TIMEOUT_MS);
-    }),
-  ]);
+  return request;
 };
 
 const parseNullableNumber = (value: string | number | null | undefined) => {
@@ -198,7 +190,8 @@ const getGames = async () => {
     response = await fetchWithTimeout(url);
   } catch (error) {
     if (gamesCache) return gamesCache.value;
-    throw error;
+    const message = error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`Không thể tải dữ liệu trận đấu: ${message}`);
   }
 
   if (!response.ok) {
@@ -221,7 +214,8 @@ const fetchWorldCup26 = async <T>(path: string) => {
   try {
     response = await fetchWithTimeout(url);
   } catch (error) {
-    throw new Error(`worldcup26.ir timeout or network error`);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`Không thể tải dữ liệu: ${message}`);
   }
 
   if (!response.ok) {
