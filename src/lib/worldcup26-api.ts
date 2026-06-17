@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { LiveMatchEvent, LiveMatchScore, LiveMatchStatus } from "@/lib/live-score";
-import { matches } from "@/lib/worldcup";
+import type { LiveMatchEvent, LiveMatchScore, LiveMatchStatus, MatchDetailsResponse } from "@/lib/live-score";
+import { matches, type Match } from "@/lib/worldcup";
 import { getEspnScoreboard, type EspnScoreboardEvent } from "@/lib/espn-football";
 
 type WorldCup26GamesResponse = {
@@ -256,6 +256,21 @@ export const getWorldCup26Events = async (matchId: string): Promise<LiveMatchEve
   ].sort((a, b) => (a.elapsed ?? 999) - (b.elapsed ?? 999));
 };
 
+export const getWorldCup26MatchDetails = async (matchId: string): Promise<MatchDetailsResponse | null> => {
+  const game = await getWorldCup26LiveScore(matchId, true);
+  if (!game) return null;
+
+  return {
+    source: "worldcup26",
+    configured: true,
+    fixtureId: game.apiFixtureId,
+    updatedAt: game.updatedAt,
+    events: game.events ?? [],
+    lineups: [],
+    statistics: [],
+  };
+};
+
 const normalizeTeamName = (value: string) => {
   const normalized = value
     .normalize("NFD")
@@ -422,4 +437,136 @@ export const getWorldCup26Standings = async (): Promise<WorldCup26Standing[]> =>
         }),
     }))
     .sort((a, b) => a.group.localeCompare(b.group));
+};
+
+const getGroupFromMatch = (match: Match): string => {
+  if (match.group) return match.group.replace(/^Group\s+/i, "");
+  return "";
+};
+
+const normalizeTeamNameForMatch = (name: string): string => {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+};
+
+const isSameTeamName = (left: string, right: string): boolean => {
+  const normalizedLeft = normalizeTeamNameForMatch(left);
+  const normalizedRight = normalizeTeamNameForMatch(right);
+  return normalizedLeft === normalizedRight || normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft);
+};
+
+export const calculateStandingsFromScores = async (scores: LiveMatchScore[]): Promise<WorldCup26Standing[]> => {
+  const teamsData = await fetchWorldCup26<WorldCup26TeamsResponse>("/get/teams");
+  const teamsById = new Map(teamsData.teams.map((team) => [team.id, team]));
+  const teamsByName = new Map<string, { id: string; name_en: string; fifa_code: string }>();
+  for (const team of teamsData.teams) {
+    teamsByName.set(team.name_en.toLowerCase(), { id: team.id, name_en: team.name_en, fifa_code: team.fifa_code });
+    teamsByName.set(normalizeTeamNameForMatch(team.name_en), { id: team.id, name_en: team.name_en, fifa_code: team.fifa_code });
+  }
+
+  const statsMap = new Map<string, Map<string, { played: number; won: number; drawn: number; lost: number; goalsFor: number; goalsAgainst: number }>>();
+
+  for (const match of matches) {
+    if (!match.group) continue;
+
+    const groupName = getGroupFromMatch(match);
+    if (!groupName) continue;
+
+    if (!statsMap.has(groupName)) {
+      statsMap.set(groupName, new Map());
+    }
+    const groupStats = statsMap.get(groupName)!;
+
+    const matchId = match.id;
+    const score = scores.find((s) => s.matchId === matchId || s.apiFixtureId === Number(match.id.replace(/^match-/, "")));
+
+    const homeTeamKey = normalizeTeamNameForMatch(match.homeTeam);
+    const awayTeamKey = normalizeTeamNameForMatch(match.awayTeam);
+
+    let homeTeamName = match.homeTeam;
+    let awayTeamName = match.awayTeam;
+
+    const foundHome = teamsByName.get(homeTeamKey);
+    const foundAway = teamsByName.get(awayTeamKey);
+    if (foundHome) homeTeamName = foundHome.name_en;
+    if (foundAway) awayTeamName = foundAway.name_en;
+
+    if (!groupStats.has(homeTeamName)) {
+      groupStats.set(homeTeamName, { played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0 });
+    }
+    if (!groupStats.has(awayTeamName)) {
+      groupStats.set(awayTeamName, { played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0 });
+    }
+
+    const homeStats = groupStats.get(homeTeamName)!;
+    const awayStats = groupStats.get(awayTeamName)!;
+
+    homeStats.played++;
+    awayStats.played++;
+
+    if (score?.status === "finished" && score.homeScore !== null && score.awayScore !== null) {
+      homeStats.goalsFor += score.homeScore;
+      homeStats.goalsAgainst += score.awayScore;
+      awayStats.goalsFor += score.awayScore;
+      awayStats.goalsAgainst += score.homeScore;
+
+      if (score.homeScore > score.awayScore) {
+        homeStats.won++;
+        awayStats.lost++;
+      } else if (score.homeScore < score.awayScore) {
+        homeStats.lost++;
+        awayStats.won++;
+      } else {
+        homeStats.drawn++;
+        awayStats.drawn++;
+      }
+    } else {
+      homeStats.goalsFor += 0;
+      homeStats.goalsAgainst += 0;
+      awayStats.goalsFor += 0;
+      awayStats.goalsAgainst += 0;
+    }
+  }
+
+  const result: WorldCup26Standing[] = [];
+
+  for (const [groupName, groupStats] of statsMap.entries()) {
+    const teams: WorldCup26StandingRow[] = [];
+
+    for (const [teamName, stats] of groupStats.entries()) {
+      const teamInfo = teamsByName.get(normalizeTeamNameForMatch(teamName));
+      teams.push({
+        teamId: teamInfo?.id ?? teamName,
+        name: teamName,
+        code: teamInfo?.fifa_code ?? "",
+        played: stats.played,
+        won: stats.won,
+        drawn: stats.drawn,
+        lost: stats.lost,
+        goalsFor: stats.goalsFor,
+        goalsAgainst: stats.goalsAgainst,
+        goalDifference: stats.goalsFor - stats.goalsAgainst,
+        points: stats.won * 3 + stats.drawn,
+      });
+    }
+
+    teams.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+      if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+      return a.name.localeCompare(b.name);
+    });
+
+    result.push({
+      group: groupName,
+      teams,
+    });
+  }
+
+  return result.sort((a, b) => a.group.localeCompare(b.group));
 };

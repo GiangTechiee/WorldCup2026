@@ -3,7 +3,7 @@ import { getApiFootballMatchDetails } from "@/lib/api-football";
 import { getEspnMatchDetails } from "@/lib/espn-football";
 import type { MatchDetailsResponse } from "@/lib/live-score";
 import { getMatch, type Match } from "@/lib/worldcup";
-import { getWorldCup26Events } from "@/lib/worldcup26-api";
+import { getWorldCup26Events, getWorldCup26MatchDetails } from "@/lib/worldcup26-api";
 
 const DETAILS_CACHE_TTL = 60_000;
 const PREMATCH_DETAIL_WINDOW = 45 * 60_000;
@@ -80,7 +80,19 @@ export async function GET(request: NextRequest) {
       } catch (apiFootballError) {
         const apiFootballMessage =
           apiFootballError instanceof Error ? apiFootballError.message : "API-Football không khả dụng";
-        details = emptyDetails(match, `${espnMessage} · ${apiFootballMessage}`);
+
+        try {
+          const worldcupDetails = await getWorldCup26MatchDetails(match.id);
+          if (worldcupDetails) {
+            details = worldcupDetails;
+          } else {
+            details = emptyDetails(match, `${espnMessage} · ${apiFootballMessage}`);
+          }
+        } catch (worldcupError) {
+          const worldcupMessage =
+            worldcupError instanceof Error ? worldcupError.message : "WorldCup26 không khả dụng";
+          details = emptyDetails(match, `${espnMessage} · ${apiFootballMessage} · ${worldcupMessage}`);
+        }
       }
     }
 

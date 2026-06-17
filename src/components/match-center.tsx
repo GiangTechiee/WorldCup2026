@@ -16,6 +16,7 @@ import type {
 } from "@/lib/live-score";
 import { isScoreVisible } from "@/lib/live-score";
 import { formatKickoff, type Match } from "@/lib/worldcup";
+import { formatLiveClock, getLiveClock, LIVE_WINDOW_MS, resolveLiveClock } from "@/lib/match-clock";
 
 type TeamSummary = {
   countryCode: string;
@@ -24,8 +25,6 @@ type TeamSummary = {
 };
 
 type MatchCenterTab = "events" | "lineups" | "stats";
-
-const LIVE_WINDOW_MS = 2.75 * 60 * 60 * 1000;
 
 const useClock = () => {
   const [now, setNow] = useState(() => Date.now());
@@ -56,11 +55,11 @@ const statusLabel = (score: LiveMatchScore | null) => {
 const displayStatusLabel = (
   score: LiveMatchScore | null,
   displayStatus: LiveMatchStatus | "scheduled",
-  elapsedByClock: number | null,
+  liveClock: ReturnType<typeof getLiveClock>,
 ) => {
   if (displayStatus === "live") {
-    const elapsed = score?.elapsed ?? elapsedByClock;
-    return elapsed !== null ? `Đang đá · ${elapsed}'` : "Đang đá";
+    const clock = resolveLiveClock(score, liveClock);
+    return clock ? `Đang đá · ${formatLiveClock(clock)}` : "Đang đá";
   }
   if (displayStatus === "finished") return "Kết thúc";
   if (displayStatus === "halftime") return "Nghỉ giữa hiệp";
@@ -839,8 +838,10 @@ export function MatchCenter({
     score?.status !== "finished" &&
     score?.status !== "postponed" &&
     score?.status !== "cancelled";
-  const displayStatus = shouldBeLiveByClock ? "live" : score?.status ?? "scheduled";
-  const elapsedByClock = shouldBeLiveByClock ? Math.max(0, Math.floor((now - kickoffTime) / 60_000) + 1) : null;
+  const liveClock = shouldBeLiveByClock ? getLiveClock(match.kickoffAt, now) : null;
+  const displayStatus = score?.status === "halftime" && liveClock !== null ? "live" :
+    score?.status === "halftime" ? "halftime" :
+    shouldBeLiveByClock ? "live" : score?.status ?? "scheduled";
   const showScore = score ? isScoreVisible(score) || (displayStatus === "live" && score.homeScore !== null && score.awayScore !== null) : displayStatus === "live";
   const homeScore = showScore ? score?.homeScore ?? 0 : null;
   const awayScore = showScore ? score?.awayScore ?? 0 : null;
@@ -850,7 +851,7 @@ export function MatchCenter({
       <div className="match-center-card">
         <div className="match-center-topline">
           <span>World Cup 2026 · {formatKickoff(match.kickoffAt)}</span>
-          <strong>{displayStatusLabel(score, displayStatus, elapsedByClock)}</strong>
+          <strong>{displayStatusLabel(score, displayStatus, liveClock)}</strong>
         </div>
 
         <div className="match-center-scoreboard">

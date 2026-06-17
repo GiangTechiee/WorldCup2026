@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useLiveScores } from "@/components/live-scores-provider";
 import type { LiveMatchStatus } from "@/lib/live-score";
 import { isScoreVisible } from "@/lib/live-score";
-
-const LIVE_WINDOW_MS = 2.75 * 60 * 60 * 1000;
+import { formatLiveClock, getLiveClock, LIVE_WINDOW_MS, resolveLiveClock } from "@/lib/match-clock";
 
 const labelForStatus = (status: LiveMatchStatus | "scheduled") => {
   if (status === "live") return "LIVE";
@@ -44,14 +43,17 @@ export function LiveScoreDisplay({
     score?.status !== "finished" &&
     score?.status !== "postponed" &&
     score?.status !== "cancelled";
-  const displayStatus = shouldBeLiveByClock ? "live" : score?.status ?? "scheduled";
+  const liveClock = shouldBeLiveByClock ? getLiveClock(kickoffAt, now) : null;
+  const displayStatus = score?.status === "halftime" && liveClock !== null ? "live" :
+    score?.status === "halftime" ? "halftime" :
+    shouldBeLiveByClock ? "live" : score?.status ?? "scheduled";
   const statusLabel = labelForStatus(displayStatus);
   const visibleScore =
     score && (isScoreVisible(score) || (displayStatus === "live" && score.homeScore !== null && score.awayScore !== null))
-      ? score
-      : null;
+    ? score
+    : null;
   const showFinalScore = score?.status === "finished" && isScoreVisible(score);
-  const elapsedByClock = shouldBeLiveByClock ? Math.max(0, Math.floor((now - kickoffTime) / 60_000) + 1) : null;
+  const elapsed = resolveLiveClock(score, liveClock);
   const displayScore = visibleScore ?? (displayStatus === "live" ? { homeScore: 0, awayScore: 0 } : null);
   const scoreAriaLabel = displayScore ? `Tỉ số ${displayScore.homeScore} - ${displayScore.awayScore}. ${statusLabel}` : statusLabel;
 
@@ -83,8 +85,8 @@ export function LiveScoreDisplay({
       )}
       <div className="match-score-kicker">
         <span className="match-score-status">{statusLabel}</span>
-        {displayStatus === "live" && (score?.elapsed != null || elapsedByClock != null) && (
-          <span className="match-score-minute data">{score?.elapsed ?? elapsedByClock}&apos;</span>
+        {displayStatus === "live" && (elapsed != null || liveClock != null) && (
+          <span className="match-score-minute data">{elapsed ? formatLiveClock(elapsed) : ""}</span>
         )}
       </div>
     </div>

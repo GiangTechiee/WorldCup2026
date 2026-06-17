@@ -2,7 +2,8 @@ import Link from "next/link";
 import { PageHeading } from "@/components/page-heading";
 import { TeamFlag } from "@/components/team-flag";
 import { groups, getTeam } from "@/lib/worldcup";
-import { getWorldCup26Standings, type WorldCup26Standing } from "@/lib/worldcup26-api";
+import { getWorldCup26Standings, calculateStandingsFromScores, type WorldCup26Standing } from "@/lib/worldcup26-api";
+import { getWorldCup26LiveScores } from "@/lib/worldcup26-api";
 
 export const metadata = { title: "Bảng xếp hạng" };
 

@@ -7,14 +7,13 @@ import { TeamFlag } from "@/components/team-flag";
 import type { LiveMatchScore, LiveMatchStatus, LiveScoresResponse } from "@/lib/live-score";
 import { isScoreVisible } from "@/lib/live-score";
 import { formatKickoff, type Match } from "@/lib/worldcup";
+import { formatLiveClock, getLiveClock, LIVE_WINDOW_MS, resolveLiveClock } from "@/lib/match-clock";
 
 type TeamSummary = {
   countryCode: string;
   id: string | null;
   name: string;
 };
-
-const LIVE_WINDOW_MS = 2.75 * 60 * 60 * 1000;
 
 const useClock = () => {
   const [now, setNow] = useState(() => Date.now());
@@ -30,12 +29,12 @@ const useClock = () => {
 const statusLabel = (
   score: LiveMatchScore | null,
   displayStatus: LiveMatchStatus | "scheduled",
-  elapsedByClock: number | null,
+  liveClock: ReturnType<typeof getLiveClock>,
 ) => {
   if (displayStatus === "finished") return "Đã kết thúc";
   if (displayStatus === "live") {
-    const elapsed = score?.elapsed ?? elapsedByClock;
-    return elapsed !== null ? `Đang đá · ${elapsed}'` : "Đang đá";
+    const clock = resolveLiveClock(score, liveClock);
+    return clock ? `Đang đá · ${formatLiveClock(clock)}` : "Đang đá";
   }
   if (displayStatus === "halftime") return "Nghỉ giữa hiệp";
   if (displayStatus === "postponed") return "Đã hoãn";
@@ -104,8 +103,10 @@ export function MatchDetailHeader({
     score?.status !== "finished" &&
     score?.status !== "postponed" &&
     score?.status !== "cancelled";
-  const displayStatus = shouldBeLiveByClock ? "live" : score?.status ?? "scheduled";
-  const elapsedByClock = shouldBeLiveByClock ? Math.max(0, Math.floor((now - kickoffTime) / 60_000) + 1) : null;
+  const liveClock = shouldBeLiveByClock ? getLiveClock(match.kickoffAt, now) : null;
+  const displayStatus = score?.status === "halftime" && liveClock !== null ? "live" :
+    score?.status === "halftime" ? "halftime" :
+    shouldBeLiveByClock ? "live" : score?.status ?? "scheduled";
   const showScore = score
     ? isScoreVisible(score) || (displayStatus === "live" && score.homeScore !== null && score.awayScore !== null)
     : displayStatus === "live";
@@ -121,7 +122,7 @@ export function MatchDetailHeader({
 
       <div className="match-summary-status">
         <span className={displayStatus === "live" ? "match-summary-live" : ""}>
-          {statusLabel(score, displayStatus, elapsedByClock)}
+          {statusLabel(score, displayStatus, liveClock)}
         </span>
         <small className="data">{formatKickoff(match.kickoffAt)}</small>
       </div>

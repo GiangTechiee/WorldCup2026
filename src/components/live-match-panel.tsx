@@ -4,10 +4,24 @@ import { useEffect, useState } from "react";
 import { Lightning, SoccerBall } from "@phosphor-icons/react";
 import type { LiveMatchEvent, LiveMatchScore, LiveScoresResponse } from "@/lib/live-score";
 import { isScoreVisible } from "@/lib/live-score";
+import { formatLiveClock, getLiveClock, resolveLiveClock } from "@/lib/match-clock";
 import type { Match } from "@/lib/worldcup";
 
-const statusLabel = (score: LiveMatchScore) => {
-  if (score.status === "live") return `Đang đá${score.elapsed !== null ? ` · ${score.elapsed}'` : ""}`;
+const useClock = () => {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  return now;
+};
+
+const statusLabel = (score: LiveMatchScore, match: Match, now: number) => {
+  const liveClock = score.status === "live" ? getLiveClock(match.kickoffAt, now) : null;
+  const clock = resolveLiveClock(score, liveClock);
+  if (score.status === "live") return `Đang đá${clock ? ` · ${formatLiveClock(clock)}` : ""}`;
   if (score.status === "halftime") return "Nghỉ giữa hiệp";
   if (score.status === "finished") return "Đã kết thúc";
   if (score.status === "postponed") return "Đã hoãn";
@@ -23,6 +37,7 @@ const eventTitle = (event: LiveMatchEvent) => {
 export function LiveMatchPanel({ match }: { match: Match }) {
   const [score, setScore] = useState<LiveMatchScore | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const now = useClock();
 
   useEffect(() => {
     let isMounted = true;
@@ -65,7 +80,7 @@ export function LiveMatchPanel({ match }: { match: Match }) {
           <span className="eyebrow">Diễn biến trận đấu</span>
           <h2 className="live-match-title">Tỉ số & sự kiện</h2>
         </div>
-        {score && <span className={`live-pill live-pill-${score.status}`}>{statusLabel(score)}</span>}
+        {score && <span className={`live-pill live-pill-${score.status}`}>{statusLabel(score, match, now)}</span>}
       </div>
 
       {hasVisibleScore && score ? (
